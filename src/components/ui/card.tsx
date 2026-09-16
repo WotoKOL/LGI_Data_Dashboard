@@ -1,0 +1,24 @@
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card" className={cn("rounded-[18px] border border-white/80 bg-card text-card-foreground shadow-[0_2px_7px_rgba(20,20,20,0.045)]", className)} {...props} />
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-header" className={cn("flex items-start justify-between gap-4 px-5 pt-5", className)} {...props} />
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
+  return <h3 data-slot="card-title" className={cn("text-[15px] font-semibold tracking-[-0.015em]", className)} {...props} />
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return <p data-slot="card-description" className={cn("text-xs text-muted-foreground", className)} {...props} />
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-content" className={cn("p-5", className)} {...props} />
+}
+
+export { Card, CardHeader, CardTitle, CardDescription, CardContent }
