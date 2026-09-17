@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import {
   Archive,
@@ -69,6 +69,7 @@ const tooltipStyle = {
 const registrationIcons = [Music2, Search, Mail]
 const cooperationIcons = [HandCoins, FileSignature, Clapperboard, Video, CircleDollarSign, CircleX]
 const chartColors = ["#7659e8", "#ff5335", "#f3ad00", "#26a269", "#3b82f6", "#e76f99"]
+const AUTO_REFRESH_SECONDS = 30
 const followerTones = ["bg-violet-100 text-violet-700", "bg-blue-100 text-blue-700", "bg-cyan-100 text-cyan-700", "bg-amber-100 text-amber-700", "bg-rose-100 text-rose-700"]
 const socialPlatformLogos: Record<string, string> = {
   tiktok: "/platform/tiktok.png",
@@ -81,6 +82,17 @@ const swrOptions = {
   shouldRetryOnError: false,
 }
 
+const requestTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+})
+
 function apiPercent(value: number) {
   return `${value.toFixed(1)}%`
 }
@@ -89,10 +101,9 @@ function compactDate(value: string) {
   return value.slice(5).replace("-", "/")
 }
 
-function reportDateTime(value?: string) {
-  if (!value) return "数据加载中"
-  const [year, month, day] = value.split("-")
-  return `${year}年${month}月${day}日 23:59:59`
+function requestDateTime(value: Date) {
+  const parts = Object.fromEntries(requestTimeFormatter.formatToParts(value).map((part) => [part.type, part.value]))
+  return `${parts.year}年${parts.month}月${parts.day}日 ${parts.hour}:${parts.minute}:${parts.second}`
 }
 
 function currency(value: number, code: string) {
@@ -123,6 +134,22 @@ function SectionSkeleton({ cards = 4, tall = false }: { cards?: number; tall?: b
         {Array.from({ length: cards }, (_, index) => <div key={index} className={cn("animate-pulse rounded-xl bg-muted", tall ? "h-80" : "h-28")} />)}
       </div>
     </div>
+  )
+}
+
+function RankingBadge({ rank }: { rank: number }) {
+  const podiumStyles = [
+    "bg-gradient-to-br from-amber-300 to-amber-500 text-white ring-2 ring-amber-100 shadow-sm",
+    "bg-gradient-to-br from-slate-300 to-slate-500 text-white ring-2 ring-slate-100 shadow-sm",
+    "bg-gradient-to-br from-orange-300 to-orange-600 text-white ring-2 ring-orange-100 shadow-sm",
+  ]
+  return (
+    <span className={cn(
+      "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-bold",
+      rank <= 3 ? podiumStyles[rank - 1] : "bg-muted text-muted-foreground",
+    )}>
+      {String(rank).padStart(2, "0")}
+    </span>
   )
 }
 
@@ -178,9 +205,9 @@ function CountryDistributionCard({ data }: { data: CreatorsDashboardData["countr
   return (
     <ChartCard title="注册达人国家分布" description="按累计注册量排名 · Top 10">
       <div className="space-y-3.5">
-        {data.slice(0, 10).map((country, index) => (
-          <div key={`${country.code}-${country.rank}`} className="grid grid-cols-[24px_32px_1fr_auto] items-center gap-2.5">
-            <span className={cn("font-mono text-[10px] font-semibold", index < 3 ? "text-primary" : "text-muted-foreground")}>{String(country.rank).padStart(2, "0")}</span>
+        {data.slice(0, 10).map((country) => (
+          <div key={`${country.code}-${country.rank}`} className="grid grid-cols-[28px_32px_1fr_auto] items-center gap-2.5">
+            <RankingBadge rank={country.rank} />
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted font-mono text-[9px] font-bold text-muted-foreground">{country.code.slice(0, 3)}</span>
             <div className="min-w-0"><div className="mb-1 flex justify-between text-xs"><span className="truncate font-medium">{country.name}</span><span className="font-mono text-muted-foreground">{apiPercent(country.percentage)}</span></div><Progress value={(country.count / maximum) * 100} indicatorClassName="bg-[#7659e8]" /></div>
             <span className="w-14 text-right font-mono text-[11px] font-semibold">{number.format(country.count)}</span>
@@ -255,13 +282,16 @@ function RegistrationSection({ creators, categories }: { creators: CreatorsDashb
       <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <ChartCard title="注册渠道来源码排行" description="各渠道注册数量与占比 · Top 10">
           <div className="space-y-3">
-            {creators.registrationSourceRanking.slice(0, 10).map((channel) => (
+            {creators.registrationSourceRanking.slice(0, 10).map((channel) => {
+              const isDirectRegistration = channel.code.toLowerCase() === "unknown"
+              return (
               <div key={`${channel.code}-${channel.rank}`} className="flex items-center gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-[10px] font-bold text-muted-foreground">{channel.rank}</span>
-                <div className="min-w-0 flex-1"><div className="mb-1 flex items-center justify-between"><span className="truncate text-xs font-medium">{channel.name}<span className="ml-1.5 font-mono text-[9px] text-muted-foreground">{channel.code}</span></span><span className="font-mono text-[10px] text-muted-foreground">{apiPercent(channel.percentage)}</span></div><Progress value={channel.percentage} indicatorClassName="bg-[#ff5335]" /></div>
+                <RankingBadge rank={channel.rank} />
+                <div className="min-w-0 flex-1"><div className="mb-1 flex items-center justify-between"><span className="truncate text-xs font-medium">{isDirectRegistration ? "直接注册" : channel.name}{!isDirectRegistration && <span className="ml-1.5 font-mono text-[9px] text-muted-foreground">{channel.code}</span>}</span><span className="font-mono text-[10px] text-muted-foreground">{apiPercent(channel.percentage)}</span></div><Progress value={channel.percentage} indicatorClassName="bg-[#ff5335]" /></div>
                 <span className="w-12 text-right font-mono text-[11px] font-semibold">{number.format(channel.count)}</span>
               </div>
-            ))}
+              )
+            })}
           </div>
         </ChartCard>
         <CountryDistributionCard data={creators.countryRanking} />
@@ -398,14 +428,14 @@ function BrandSection() {
               <BarChart data={data.items} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid horizontal={false} stroke="#eef0f4" strokeDasharray="3 3" />
                 <XAxis type="number" tickLine={false} axisLine={false} fontSize={10} tick={{ fill: "#9198a6" }} />
-                <YAxis type="category" dataKey="brandName" tickLine={false} axisLine={false} width={82} fontSize={10} tick={{ fill: "#49505c" }} />
+                <YAxis type="category" dataKey="brandId" tickLine={false} axisLine={false} width={112} fontSize={10} tick={{ fill: "#49505c" }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="count" name={config[metric].label} fill="#7c5ce5" radius={[0, 7, 7, 0]} barSize={10} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer></div>
             <div className="max-h-[520px] overflow-y-auto pr-1"><Table>
-              <TableHeader className="sticky top-0 z-10 bg-card"><TableRow><TableHead>排名 / 品牌</TableHead><TableHead>企业 ID</TableHead><TableHead className="text-right">{config[metric].label}</TableHead></TableRow></TableHeader>
-              <TableBody>{data.items.map((brand) => <TableRow key={`${brand.brandId}-${brand.rank}`}><TableCell><div className="flex items-center gap-2"><span className={cn("flex h-6 w-6 items-center justify-center rounded-md font-mono text-[10px] font-bold", brand.rank <= 3 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{brand.rank}</span><span className="font-medium">{brand.brandName}</span></div></TableCell><TableCell className="font-mono text-[10px] text-muted-foreground">{brand.brandId}</TableCell><TableCell className="text-right font-mono font-bold"><span className="inline-flex items-center gap-1"><Icon className="h-3 w-3 text-muted-foreground" />{number.format(brand.count)}</span></TableCell></TableRow>)}</TableBody>
+              <TableHeader className="sticky top-0 z-10 bg-card"><TableRow><TableHead>排名</TableHead><TableHead>企业 ID</TableHead><TableHead className="text-right">{config[metric].label}</TableHead></TableRow></TableHeader>
+              <TableBody>{data.items.map((brand) => <TableRow key={`${brand.brandId}-${brand.rank}`}><TableCell><RankingBadge rank={brand.rank} /></TableCell><TableCell className="font-mono text-[10px] text-muted-foreground">{brand.brandId}</TableCell><TableCell className="text-right font-mono font-bold"><span className="inline-flex items-center gap-1"><Icon className="h-3 w-3 text-muted-foreground" />{number.format(brand.count)}</span></TableCell></TableRow>)}</TableBody>
             </Table></div>
           </div>
         </ChartCard>
@@ -446,23 +476,49 @@ function SubscriptionSection({ data }: { data: SubscriptionsDashboardData }) {
 
 export function OverviewPage() {
   const { mutate: mutateCache } = useSWRConfig()
+  const [lastRequestedAt, setLastRequestedAt] = useState(() => new Date())
+  const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(AUTO_REFRESH_SECONDS)
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  const autoRefreshSecondsRef = useRef(AUTO_REFRESH_SECONDS)
   const creators = useSWR<CreatorsDashboardData>(dashboardEndpoint("creators"), dashboardFetcher, swrOptions)
   const categories = useSWR<CategoriesDashboardData>(dashboardEndpoint("categories"), dashboardFetcher, swrOptions)
   const activity = useSWR<ActivityDashboardData>(dashboardEndpoint("activity"), dashboardFetcher, swrOptions)
   const campaigns = useSWR<CampaignsDashboardData>(dashboardEndpoint("campaigns"), dashboardFetcher, swrOptions)
   const subscriptions = useSWR<SubscriptionsDashboardData>(dashboardEndpoint("subscriptions"), dashboardFetcher, swrOptions)
-  const isRefreshing = creators.isValidating || categories.isValidating || activity.isValidating || campaigns.isValidating || subscriptions.isValidating
-  const reportDate = creators.data?.reportDate ?? categories.data?.reportDate ?? activity.data?.reportDate ?? campaigns.data?.reportDate ?? subscriptions.data?.reportDate
+  const refreshAll = useCallback(async (showManualProgress = false) => {
+    autoRefreshSecondsRef.current = AUTO_REFRESH_SECONDS
+    setAutoRefreshSeconds(AUTO_REFRESH_SECONDS)
+    setLastRequestedAt(new Date())
+    if (showManualProgress) setIsManualRefreshing(true)
+    try {
+      await mutateCache((key) => typeof key === "string" && key.startsWith(DASHBOARD_API_BASE_URL))
+    } finally {
+      if (showManualProgress) setIsManualRefreshing(false)
+    }
+  }, [mutateCache])
 
-  function refreshAll() {
-    void mutateCache((key) => typeof key === "string" && key.startsWith(DASHBOARD_API_BASE_URL), undefined, { revalidate: true })
-  }
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      const nextSeconds = autoRefreshSecondsRef.current - 1
+      if (nextSeconds <= 0) {
+        void refreshAll()
+        return
+      }
+      autoRefreshSecondsRef.current = nextSeconds
+      setAutoRefreshSeconds(nextSeconds)
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [refreshAll])
 
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><h1 className="text-2xl font-semibold tracking-[-0.03em]">运营数据大盘</h1><p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />数据统计截止至 <time dateTime={reportDate ? `${reportDate}T23:59:59+08:00` : undefined} className="font-mono text-foreground/75">{reportDateTime(reportDate)}</time></p></div>
-        <Button variant="outline" size="sm" className="self-start bg-white sm:self-auto" aria-label="刷新运营数据" onClick={refreshAll} disabled={isRefreshing}><RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />{isRefreshing ? "刷新中" : "刷新"}</Button>
+        <div><h1 className="text-2xl font-semibold tracking-[-0.03em]">业务总览</h1><p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />数据统计截止至 <time dateTime={lastRequestedAt.toISOString()} className="font-mono text-foreground/75">{requestDateTime(lastRequestedAt)}</time></p></div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground"><span className="font-mono font-semibold text-foreground/70">{autoRefreshSeconds}s</span> 后自动刷新</span>
+          <Button variant="outline" size="sm" className="bg-white" aria-label="刷新运营数据" onClick={() => void refreshAll(true)} disabled={isManualRefreshing}><RefreshCw className={cn("h-3.5 w-3.5", isManualRefreshing && "animate-spin")} />{isManualRefreshing ? "刷新中" : "刷新"}</Button>
+        </div>
       </div>
 
       {creators.isLoading || categories.isLoading ? <SectionSkeleton cards={4} /> : creators.error || categories.error ? <ErrorPanel message={(creators.error ?? categories.error).message} retry={() => { void creators.mutate(); void categories.mutate() }} /> : creators.data && categories.data ? <RegistrationSection creators={creators.data} categories={categories.data} /> : null}
