@@ -43,7 +43,7 @@ export function TopHeader({ page, onNavigate }: TopHeaderProps) {
             className={cn("flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px] font-medium transition-all sm:px-4 sm:text-xs", page === "automation" ? "bg-black text-white shadow-sm" : "text-foreground/55 hover:bg-white/80 hover:text-foreground")}
           >
             <Workflow className="hidden h-3.5 w-3.5 sm:block" />
-            运营自动化
+            自动化运营
           </button>
         </nav>
 

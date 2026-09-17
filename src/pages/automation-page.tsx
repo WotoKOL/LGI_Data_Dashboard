@@ -3,20 +3,16 @@ import type { LucideIcon } from "lucide-react"
 import {
   AlertTriangle,
   CheckCircle2,
-  CirclePause,
   Clock3,
   FileCode2,
-  Mail,
   MailCheck,
   MessageSquareText,
   RefreshCw,
-  Send,
   Settings2,
   ShieldAlert,
   Sparkles,
   UserRoundCheck,
   UsersRound,
-  WandSparkles,
   Zap,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -28,12 +24,12 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { SectionHeading } from "@/components/dashboard-primitives"
+import { CampaignAutomationSection } from "@/components/campaign-automation-section"
+import { CreatorPushNode } from "@/components/creator-push-node"
 import {
   creatorAutomationRules,
   creatorErrorLogs,
   feedbackTickets,
-  noApplicationWarnings,
-  reviewTimeoutWarnings,
   type CreatorRuleId,
   type ErrorLog,
   type FeedbackTicket,
@@ -67,7 +63,7 @@ function AutomationPageHeader({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div>
-        <div className="mb-2 flex items-center gap-2"><Badge className="border-0 bg-[#e9f9ba] text-[#304600]">Automation Center</Badge><span className="flex items-center gap-1 text-[10px] text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />5 条规则运行中</span></div>
+        <div className="mb-2 flex items-center gap-2"><span className="flex items-center gap-1 text-[10px] text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />5 条规则运行中</span></div>
         <h1 className="text-2xl font-semibold tracking-[-0.03em]">自动化运营</h1>
         <p className="mt-1.5 text-xs text-muted-foreground">以规则和预警驱动达人激活、商单治理与异常问题闭环。</p>
       </div>
@@ -81,7 +77,6 @@ export function AutomationPage() {
   const [templateRuleId, setTemplateRuleId] = useState<CreatorRuleId | null>(null)
   const [templateDraft, setTemplateDraft] = useState({ subject: "", body: "" })
   const [lastAction, setLastAction] = useState("")
-  const [processedCampaigns, setProcessedCampaigns] = useState<Set<string>>(() => new Set())
   const [activeIssueTab, setActiveIssueTab] = useState<"logs" | "tickets">("logs")
   const [selectedLog, setSelectedLog] = useState<ErrorLog | null>(null)
   const [ticketStatuses, setTicketStatuses] = useState<Record<string, FeedbackTicket["status"]>>(() => Object.fromEntries(feedbackTickets.map((ticket) => [ticket.id, ticket.status])) as Record<string, FeedbackTicket["status"]>)
@@ -93,11 +88,6 @@ export function AutomationPage() {
     if (!rule) return
     setTemplateDraft({ subject: rule.templateSubject, body: rule.templateBody })
     setTemplateRuleId(ruleId)
-  }
-
-  function markCampaignProcessed(id: string, message: string) {
-    setProcessedCampaigns((current) => new Set(current).add(id))
-    setLastAction(message)
   }
 
   function advanceTicket(ticketId: string) {
@@ -122,7 +112,7 @@ export function AutomationPage() {
       </div>
 
       <section className="space-y-4">
-        <SectionHeading eyebrow="Creator automation" title="达人激活自动化" description="按达人生命周期节点自动触达，并对沉默达人进行批量激活" />
+        <SectionHeading eyebrow="Creator automation" title="达人自动化运营" description="按达人生命周期节点自动触达，并对沉默达人进行批量激活" />
         <div className="grid gap-3 xl:grid-cols-3">
           {creatorAutomationRules.map((rule) => {
             const Icon = creatorRuleIcons[rule.id]
@@ -136,47 +126,27 @@ export function AutomationPage() {
                   </div>
                   <h3 className="mt-4 text-base font-semibold">{rule.title}</h3>
                   <p className="mt-1.5 min-h-10 text-xs leading-5 text-muted-foreground">{rule.description}</p>
-                  <div className="mt-4 rounded-xl bg-muted/60 p-3"><p className="text-[9px] font-medium text-muted-foreground">触发条件</p><p className="mt-1 text-[11px] font-medium">{rule.trigger}</p><p className="mt-1 text-[9px] text-muted-foreground">{rule.mode}</p></div>
-                  <div className="mt-4 grid grid-cols-3 divide-x divide-border">
-                    <div><p className="text-[9px] text-muted-foreground">当前人群</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.audience)}</p></div>
-                    <div className="pl-3"><p className="text-[9px] text-muted-foreground">今日触达</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.touchedToday)}</p></div>
+                  <div className="mt-4 rounded-xl bg-muted/60 p-3"><p className="text-[9px] font-medium text-muted-foreground">触发条件</p><p className="mt-1 text-[11px] font-medium">{rule.trigger}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] text-muted-foreground"><span>{rule.mode}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />最新执行 {rule.latestExecutedAt}</span></div></div>
+                  <div className="mt-4 grid grid-cols-4 divide-x divide-border">
+                    <div><p className="text-[9px] text-muted-foreground">待处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.pending)}</p></div>
+                    <div className="pl-3"><p className="text-[9px] text-muted-foreground">累计处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.totalProcessed)}</p></div>
+                    <div className="pl-3"><p className="text-[9px] text-muted-foreground">今日处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.processedToday)}</p></div>
                     <div className="pl-3"><p className="text-[9px] text-muted-foreground">激活率</p><p className="mt-1 font-mono text-lg font-bold">{rule.successRate}</p></div>
                   </div>
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     <Button variant="outline" size="sm" onClick={() => openTemplate(rule.id)}><Settings2 className="h-3.5 w-3.5" />邮件模板</Button>
-                    {rule.id === "inactive" ? <Button size="sm" disabled={!enabled} onClick={() => setLastAction(`已将 ${number.format(rule.audience)} 封激活邮件加入发送队列`)}><Send className="h-3.5 w-3.5" />一键发送</Button> : <Button variant="ghost" size="sm" onClick={() => setLastAction(`已加载“${rule.title}”待激活名单`)}>查看人群</Button>}
                   </div>
                 </CardContent>
               </Card>
             )
           })}
         </div>
+        <CreatorPushNode onAction={setLastAction} />
       </section>
 
       <section className="space-y-4">
-        <SectionHeading eyebrow="Campaign operations" title="商单预警与诊断" description="聚合无申请商单与品牌方审核超时问题，由运营人工确认处理" />
-        <div className="grid gap-3 xl:grid-cols-2">
-          <Card className="border-0">
-            <CardHeader><div><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" />新商单 48 小时无申请</CardTitle><CardDescription className="mt-1">建议检查报酬、达人门槛、国家和内容要求</CardDescription></div><Badge variant="warning">{noApplicationWarnings.length} 个待诊断</Badge></CardHeader>
-            <CardContent className="space-y-2 pt-4">
-              {noApplicationWarnings.map((campaign) => {
-                const processed = processedCampaigns.has(campaign.id)
-                return <div key={campaign.id} className="rounded-xl border border-border/70 p-3.5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold">{campaign.title}</p><p className="mt-1 text-[9px] text-muted-foreground">{campaign.brand} · {campaign.id} · 发布于 {campaign.publishedAt}</p></div><Badge variant={processed ? "success" : "warning"}>{processed ? "已诊断" : `${campaign.hours}h 无申请`}</Badge></div><div className="mt-3 flex items-center justify-between"><span className="text-[10px] text-muted-foreground">曝光 {number.format(campaign.impressions)} 次</span><Button variant="ghost" size="sm" disabled={processed} onClick={() => markCampaignProcessed(campaign.id, `已生成 ${campaign.id} 的无申请诊断建议`)}><WandSparkles className="h-3.5 w-3.5" />{processed ? "诊断完成" : "开始诊断"}</Button></div></div>
-              })}
-            </CardContent>
-          </Card>
-
-          <Card className="border-0">
-            <CardHeader><div><CardTitle className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-rose-500" />品牌方申请审核超时</CardTitle><CardDescription className="mt-1">72 小时未审核需跟进，超过 7 天建议暂停商单</CardDescription></div><Badge variant="danger">{reviewTimeoutWarnings.length} 个需处理</Badge></CardHeader>
-            <CardContent className="space-y-2 pt-4">
-              {reviewTimeoutWarnings.map((campaign) => {
-                const processed = processedCampaigns.has(campaign.id)
-                const critical = campaign.risk === "critical"
-                return <div key={campaign.id} className={cn("rounded-xl border p-3.5", critical ? "border-rose-100 bg-rose-50/35" : "border-border/70")}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold">{campaign.title}</p><p className="mt-1 text-[9px] text-muted-foreground">{campaign.brand} · {campaign.id} · 最后审核 {campaign.lastReviewAt}</p></div><Badge variant={processed ? "success" : critical ? "danger" : "warning"}>{processed ? "已处理" : critical ? "超 7 天" : "超 72 小时"}</Badge></div><div className="mt-3 flex items-center justify-between"><span className="text-[10px] text-muted-foreground">{campaign.pending} 位达人待审核 · 停留 {campaign.idleHours}h</span><Button variant={critical ? "outline" : "ghost"} size="sm" disabled={processed} onClick={() => markCampaignProcessed(campaign.id, critical ? `已暂停商单 ${campaign.id}` : `已向 ${campaign.brand} 发送审核提醒`)}>{critical ? <CirclePause className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}{critical ? "暂停商单" : "提醒品牌方"}</Button></div></div>
-              })}
-            </CardContent>
-          </Card>
-        </div>
+        <SectionHeading eyebrow="Campaign operations" title="品牌方/商单自动化运营" description="聚合无申请商单与品牌方审核超时问题，由运营人工确认处理" />
+        <CampaignAutomationSection onAction={setLastAction} />
       </section>
 
       <section className="space-y-4">
