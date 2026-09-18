@@ -1,6 +1,7 @@
-export const DASHBOARD_API_BASE_URL = (
-  import.meta.env.VITE_DASHBOARD_API_BASE_URL ?? "https://apipre.wotohub.com/lgi-admin"
-).replace(/\/$/, "")
+import { authenticatedFetch, registerRequestParameters } from "@/lib/api-client"
+import { getDashboardApiBaseUrl } from "@/lib/runtime-config"
+
+export const DASHBOARD_API_BASE_URL = getDashboardApiBaseUrl()
 
 export type DistributionItem = {
   code: string
@@ -160,11 +161,13 @@ export function dashboardEndpoint(
   Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value !== undefined && value !== "") url.searchParams.set(key, String(value))
   })
-  return url.toString()
+  const requestUrl = url.toString()
+  registerRequestParameters(requestUrl, params)
+  return requestUrl
 }
 
 export async function dashboardFetcher<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: { Accept: "application/json" } })
+  const response = await authenticatedFetch(url)
   if (!response.ok) {
     throw new DashboardApiError(`接口请求失败（HTTP ${response.status}）`, { status: response.status })
   }
