@@ -11,6 +11,18 @@ export type DistributionItem = {
   percentage: number
 }
 
+export type MetricItem = {
+  code: string
+  name: string
+  count: number
+  percentage: number
+}
+
+export type MetricDistribution = {
+  totalCount: number
+  items: MetricItem[]
+}
+
 export type RankingItem = {
   rank: number
   code: string
@@ -79,30 +91,17 @@ export type ActivityDashboardData = {
 }
 
 export type CampaignsDashboardData = {
-  reportDate: string
-  totalCampaignCount: number
-  onShelfCampaignCount: number
-  offShelfCampaignCount: number
-  pendingReviewCampaignCount: number
-  publishingTrend: Array<{
+  recent30DayPublishTrend: Array<{
     date: string
     totalCount: number
     wotoHubCount: number
     wotoKolCount: number
     wotoPartnerCount: number
   }>
-  sourceDistribution: DistributionItem[]
-  cooperationModeDistribution: DistributionItem[]
-  applyOverview: {
-    totalApplyCount: number
-    approvedApplyCount: number
-    approvedRate: number
-    rejectedApplyCount: number
-    rejectedRate: number
-    pendingApplyCount: number
-    pendingRate: number
-  }
-  fulfillmentProgress: DistributionItem[]
+  campaignSourceDistribution: MetricDistribution
+  campaignCompensationDistribution: MetricDistribution
+  creatorApplicationOverview: MetricDistribution
+  creatorCollaborationProgressOverview: MetricDistribution
 }
 
 export type BrandMetric = "published" | "pending" | "rejected"

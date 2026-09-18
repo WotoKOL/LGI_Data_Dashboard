@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import {
-  Archive,
-  CircleCheckBig,
   CircleDollarSign,
   CircleX,
   Clapperboard,
@@ -16,7 +14,6 @@ import {
   ReceiptText,
   RefreshCw,
   Search,
-  ShoppingBag,
   UserRoundCheck,
   UserRoundX,
   UsersRound,
@@ -67,7 +64,6 @@ const tooltipStyle = {
 }
 
 const registrationIcons = [Music2, Search, Mail]
-const cooperationIcons = [HandCoins, FileSignature, Clapperboard, Video, CircleDollarSign, CircleX]
 const chartColors = ["#7659e8", "#ff5335", "#f3ad00", "#26a269", "#3b82f6", "#e76f99"]
 const AUTO_REFRESH_SECONDS = 30
 const followerTones = ["bg-violet-100 text-violet-700", "bg-blue-100 text-blue-700", "bg-cyan-100 text-cyan-700", "bg-amber-100 text-amber-700", "bg-rose-100 text-rose-700"]
@@ -76,6 +72,33 @@ const socialPlatformLogos: Record<string, string> = {
   instagram: "/platform/instagram.webp",
   youtube: "/platform/youtube.png",
 }
+
+const campaignSourceColors: Record<string, string> = {
+  WOTO_HUB: "#7659e8",
+  WOTO_KOL: "#ff5335",
+  WOTO_PARTNER: "#f3ad00",
+}
+
+const campaignCompensationColors: Record<string, string> = {
+  PAID: "#7659e8",
+  HYBRID: "#ff5335",
+  GIFTED: "#f3ad00",
+}
+
+const applicationStatusColors: Record<string, string> = {
+  APPROVED: "#26a269",
+  REJECTED: "#ff5335",
+  PENDING_REVIEW: "#f3ad00",
+}
+
+const collaborationIcons = {
+  NEGOTIATING: HandCoins,
+  CONTRACT_SIGNING: FileSignature,
+  VIDEO_MATERIAL_SUBMISSION: Clapperboard,
+  LIVE_LINK_SUBMISSION: Video,
+  COMPLETED_PAID: CircleDollarSign,
+  CANCELLED: CircleX,
+} as const
 
 const swrOptions = {
   revalidateOnFocus: false,
@@ -339,35 +362,48 @@ function ActivitySection({ data }: { data: ActivityDashboardData }) {
   )
 }
 
-function distributionWithColors(data: DistributionItem[]) {
-  return data.map((item, index) => ({ name: item.name, value: item.count, percentage: item.percentage, color: chartColors[index] }))
+function distributionWithColors(
+  data: Array<Pick<DistributionItem, "code" | "name" | "count" | "percentage">>,
+  colorsByCode?: Record<string, string>,
+) {
+  return data.map((item, index) => ({
+    code: item.code,
+    name: item.name,
+    value: item.count,
+    percentage: item.percentage,
+    color: colorsByCode?.[item.code] ?? chartColors[index % chartColors.length],
+  }))
 }
 
 function CommerceSection({ data }: { data: CampaignsDashboardData }) {
-  const sources = distributionWithColors(data.sourceDistribution)
-  const modes = distributionWithColors(data.cooperationModeDistribution)
-  const topSource = data.sourceDistribution[0]
-  const topMode = data.cooperationModeDistribution.reduce<DistributionItem | undefined>((top, item) => !top || item.percentage > top.percentage ? item : top, undefined)
+  const sources = distributionWithColors(data.campaignSourceDistribution.items, campaignSourceColors)
+  const modes = distributionWithColors(data.campaignCompensationDistribution.items, campaignCompensationColors)
+  const topSource = sources.reduce<(typeof sources)[number] | undefined>((top, item) => !top || item.percentage > top.percentage ? item : top, undefined)
+  const topMode = modes.reduce<(typeof modes)[number] | undefined>((top, item) => !top || item.percentage > top.percentage ? item : top, undefined)
+  const applicationItems = new Map(data.creatorApplicationOverview.items.map((item) => [item.code, item]))
+  const applicationStatusMetrics = (["APPROVED", "REJECTED", "PENDING_REVIEW"] as const).map((code) => {
+    const item = applicationItems.get(code)
+    return {
+      code,
+      label: item?.name ?? ({ APPROVED: "审核通过", REJECTED: "审核拒绝", PENDING_REVIEW: "待审核" } as const)[code],
+      rateLabel: ({ APPROVED: "通过率", REJECTED: "拒绝率", PENDING_REVIEW: "待审核" } as const)[code],
+      value: item?.count ?? 0,
+      percentage: item?.percentage ?? 0,
+      color: applicationStatusColors[code],
+    }
+  })
   const applicationMetrics = [
-    { label: "申请总数", value: data.applyOverview.totalApplyCount, color: "#111111" },
-    { label: "审核通过", value: data.applyOverview.approvedApplyCount, color: "#26a269" },
-    { label: "审核拒绝", value: data.applyOverview.rejectedApplyCount, color: "#ff5335" },
-    { label: "待审核", value: data.applyOverview.pendingApplyCount, color: "#f3ad00" },
+    { code: "TOTAL", label: "申请总数", value: data.creatorApplicationOverview.totalCount, color: "#111111" },
+    ...applicationStatusMetrics,
   ]
   return (
     <section className="space-y-4">
       <SectionHeading eyebrow="Monetization" title="商单与合作转化" description="商单结构、申请审核与合作履约的完整商业化漏斗" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="平台总商单数" value={data.totalCampaignCount} icon={ShoppingBag} />
-        <MetricCard label="上架中总商单数" value={data.onShelfCampaignCount} icon={CircleCheckBig} tone="green" />
-        <MetricCard label="已下架总商单数" value={data.offShelfCampaignCount} icon={Archive} />
-        <MetricCard label="待审核总商单数" value={data.pendingReviewCampaignCount} icon={Clock3} tone="amber" />
-      </div>
       <div className="grid gap-3 xl:grid-cols-[1.35fr_1fr_1fr]">
         <ChartCard title="最近 30 天商单发布趋势" description="平台发布总数与各业务线发布数">
           <DotLegend className="mb-3" items={[{ name: "发布总数", color: "#111111" }, { name: "WotoHub", color: "#7c5ce5" }, { name: "WotoKOL", color: "#f3ad00" }, { name: "WotoPartner", color: "#ff5335" }]} />
           <div className="h-[170px] min-w-0"><ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.publishingTrend} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
+            <LineChart data={data.recent30DayPublishTrend} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="#eef0f4" strokeDasharray="3 3" />
               <XAxis dataKey="date" tickFormatter={compactDate} interval={6} tickLine={false} axisLine={false} fontSize={9} tick={{ fill: "#9198a6" }} />
               <YAxis tickLine={false} axisLine={false} fontSize={9} tick={{ fill: "#9198a6" }} />
@@ -380,26 +416,27 @@ function CommerceSection({ data }: { data: CampaignsDashboardData }) {
           </ResponsiveContainer></div>
         </ChartCard>
         <ChartCard title="商单来源分布" description="三个业务平台的商单贡献">
-          <DonutChart data={sources} centerTop={topSource ? apiPercent(topSource.percentage) : "—"} centerBottom={topSource ? `${topSource.name} 占比` : "暂无数据"} />
+          <DonutChart data={sources} centerTop={topSource && data.campaignSourceDistribution.totalCount > 0 ? apiPercent(topSource.percentage) : "—"} centerBottom={topSource && data.campaignSourceDistribution.totalCount > 0 ? `${topSource.name} 占比` : "暂无数据"} />
           <DotLegend items={sources} className="justify-center" />
         </ChartCard>
         <ChartCard title="商单报酬类型" description="Paid / Hybrid / Gifted 占比">
-          <DonutChart data={modes} centerTop={topMode ? apiPercent(topMode.percentage) : "—"} centerBottom={topMode ? `${topMode.name} 占比` : "暂无数据"} />
+          <DonutChart data={modes} centerTop={topMode && data.campaignCompensationDistribution.totalCount > 0 ? apiPercent(topMode.percentage) : "—"} centerBottom={topMode && data.campaignCompensationDistribution.totalCount > 0 ? `${topMode.name} 占比` : "暂无数据"} />
           <DotLegend items={modes} className="justify-center" />
         </ChartCard>
       </div>
 
       <div className="grid gap-3 xl:grid-cols-[1fr_1.4fr]">
         <ChartCard title="达人申请商单概览" description="累计申请处理状态">
-          <div className="grid grid-cols-2 gap-3">{applicationMetrics.map((item) => <div key={item.label} className="rounded-md border border-border/70 p-3.5"><div className="flex items-center gap-2 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</div><p className="mt-2 font-mono text-lg font-semibold">{number.format(item.value)}</p></div>)}</div>
-          <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-muted">{applicationMetrics.slice(1).map((item) => <span key={item.label} className="block h-full shrink-0" style={{ width: `${data.applyOverview.totalApplyCount ? item.value / data.applyOverview.totalApplyCount * 100 : 0}%`, backgroundColor: item.color }} />)}</div>
-          <div className="mt-3 flex justify-between text-[10px] text-muted-foreground"><span>通过率 <b className="text-foreground">{apiPercent(data.applyOverview.approvedRate)}</b></span><span>拒绝率 <b className="text-foreground">{apiPercent(data.applyOverview.rejectedRate)}</b></span><span>待审核 <b className="text-foreground">{apiPercent(data.applyOverview.pendingRate)}</b></span></div>
+          <div className="grid grid-cols-2 gap-3">{applicationMetrics.map((item) => <div key={item.code} className="rounded-md border border-border/70 p-3.5"><div className="flex items-center gap-2 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</div><p className="mt-2 font-mono text-lg font-semibold">{number.format(item.value)}</p></div>)}</div>
+          <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-muted">{applicationStatusMetrics.map((item) => <span key={item.code} className="block h-full shrink-0" style={{ width: `${item.percentage}%`, backgroundColor: item.color }} />)}</div>
+          <div className="mt-3 flex justify-between text-[10px] text-muted-foreground">{applicationStatusMetrics.map((item) => <span key={item.code}>{item.rateLabel} <b className="text-foreground">{apiPercent(item.percentage)}</b></span>)}</div>
         </ChartCard>
         <ChartCard title="达人合作履约进度概览" description="进入合作后的各阶段数量与转化">
           <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {data.fulfillmentProgress.map((stage, index) => {
-              const Icon = cooperationIcons[index] ?? HandCoins
-              return <div key={stage.code} className={cn("relative rounded-md border p-3.5", stage.code === "cancelled" ? "border-rose-100 bg-rose-50/50" : "border-border/70 bg-muted/20")}><div className="flex items-center justify-between"><span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", stage.code === "cancelled" ? "bg-rose-100 text-rose-600" : "bg-white text-[#7659e8] shadow-sm")}><Icon className="h-3.5 w-3.5" /></span><span className="text-[9px] text-muted-foreground">{apiPercent(stage.percentage)}</span></div><p className="mt-3 text-[10px] text-muted-foreground">{stage.name}</p><p className="mt-0.5 font-mono text-lg font-bold">{number.format(stage.count)}</p></div>
+            {data.creatorCollaborationProgressOverview.items.map((stage) => {
+              const Icon = collaborationIcons[stage.code as keyof typeof collaborationIcons] ?? HandCoins
+              const isCancelled = stage.code === "CANCELLED"
+              return <div key={stage.code} className={cn("relative rounded-md border p-3.5", isCancelled ? "border-rose-100 bg-rose-50/50" : "border-border/70 bg-muted/20")}><div className="flex items-center justify-between"><span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", isCancelled ? "bg-rose-100 text-rose-600" : "bg-white text-[#7659e8] shadow-sm")}><Icon className="h-3.5 w-3.5" /></span><span className="text-[9px] text-muted-foreground">{apiPercent(stage.percentage)}</span></div><p className="mt-3 text-[10px] text-muted-foreground">{stage.name}</p><p className="mt-0.5 font-mono text-lg font-bold">{number.format(stage.count)}</p></div>
             })}
           </div>
         </ChartCard>
