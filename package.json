@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --mode prod",
+    "build:pre": "tsc -b && vite build --mode pre",
+    "build:prod": "tsc -b && vite build --mode prod",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -13,6 +15,8 @@
     "@tailwindcss/vite": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "crypto-js": "4.2.0",
+    "jsencrypt": "3.5.4",
     "lucide-react": "latest",
     "radix-ui": "^1.6.7",
     "react": "latest",
@@ -24,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "latest",
+    "@types/crypto-js": "4.2.2",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
