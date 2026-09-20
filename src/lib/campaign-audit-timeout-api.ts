@@ -13,6 +13,8 @@ export type CampaignAuditTimeoutItem = {
   brandId: string
   brandDisplayId: string | null
   brandName: string | null
+  brandPlatformType: string | null
+  brandUserPhone: string | null
   publishTime: string | null
   oldestPendingApplyTime: string | null
   lastAuditTime: string | null

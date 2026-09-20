@@ -11,6 +11,7 @@ export type BrandPendingAuditItem = {
   brandDisplayId: string | null
   brandName: string | null
   brandPlatform: string | null
+  brandUserPhone: string | null
   campaignCount: number
   pendingAuditCount: number
 }

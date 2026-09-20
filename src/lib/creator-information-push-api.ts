@@ -87,6 +87,30 @@ export type CreatorPushTasksPage = {
   pageSize: number
 }
 
+export type CreatorPushRecipient = {
+  id: string | number
+  lgiId: string
+  nickname: string | null
+  membershipId: number | null
+  membershipName: string | null
+  toEmail: string | null
+  stationStatus: string | null
+  emailStatus: string | null
+  stationRetryCount: number
+  emailRetryCount: number
+  stationErrorMessage: string | null
+  emailErrorMessage: string | null
+  stationSentTime: string | null
+  emailSentTime: string | null
+}
+
+export type CreatorPushRecipientsPage = {
+  total: number
+  rows: CreatorPushRecipient[]
+  currentPage: number
+  pageSize: number
+}
+
 type ApiEnvelope<T> = {
   code: string
   message: string
@@ -177,4 +201,14 @@ export async function cancelCreatorPushTask(taskId: string) {
     body,
   )
   await parseResponse<null>(response, true)
+}
+
+export async function getCreatorPushRecipients(taskId: string, currentPage = 1, pageSize = 20) {
+  const url = new URL(`${CREATOR_PUSH_API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/recipients`)
+  url.searchParams.set("currentPage", String(currentPage))
+  url.searchParams.set("pageSize", String(pageSize))
+  const requestUrl = url.toString()
+  registerRequestParameters(requestUrl, { currentPage, pageSize })
+  const response = await authenticatedFetch(requestUrl)
+  return parseResponse<CreatorPushRecipientsPage>(response)
 }

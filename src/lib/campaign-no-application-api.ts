@@ -13,6 +13,8 @@ export type CampaignNoApplicationItem = {
   brandId: string
   brandDisplayId: string | null
   brandName: string | null
+  brandPlatformType: string | null
+  brandUserPhone: string | null
   publishTime: string | null
   noApplicationHours: number
   noApplicationDays: number

@@ -15,6 +15,7 @@ import {
   Search,
   Send,
   SlidersHorizontal,
+  UsersRound,
   XCircle,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -33,6 +34,7 @@ import {
   createCreatorPushTask,
   getCreatorPushMatchCount,
   getCreatorPushOptions,
+  getCreatorPushRecipients,
   getCreatorPushTasks,
   getCreatorPushTask,
   getCurrentCreatorPushTask,
@@ -43,6 +45,7 @@ import {
   type CreatorPushTargetType,
   type CreatorPushTask,
   type CreatorPushTasksPage,
+  type CreatorPushRecipientsPage,
 } from "@/lib/creator-information-push-api"
 import { cn, number } from "@/lib/utils"
 
@@ -263,6 +266,11 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
   const [historyPage, setHistoryPage] = useState(1)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState("")
+  const [recipientsTaskId, setRecipientsTaskId] = useState("")
+  const [recipientsPage, setRecipientsPage] = useState(1)
+  const [recipientsData, setRecipientsData] = useState<CreatorPushRecipientsPage | null>(null)
+  const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [recipientsError, setRecipientsError] = useState("")
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTaskId, setDetailTaskId] = useState("")
   const [detailTask, setDetailTask] = useState<CreatorPushTask | null>(null)
@@ -290,6 +298,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
   const activeCount = matchResult?.matchedCount ?? 0
   const hasValidSchedule = deliveryMode === "immediate" || scheduledAt > minimumScheduledAt
   const totalHistoryPages = Math.max(1, Math.ceil((historyTasks?.total ?? 0) / (historyTasks?.pageSize || 20)))
+  const totalRecipientsPages = Math.max(1, Math.ceil((recipientsData?.total ?? 0) / (recipientsData?.pageSize || 20)))
 
   const loadOptions = useCallback(async () => {
     setOptionsLoading(true)
@@ -452,6 +461,23 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
     void loadHistory(1)
   }
 
+  const loadRecipients = useCallback(async (taskId: string, page = 1) => {
+    const normalizedTaskId = taskId.trim()
+    if (!normalizedTaskId) return
+    setRecipientsLoading(true)
+    setRecipientsError("")
+    try {
+      const result = await getCreatorPushRecipients(normalizedTaskId, page, 20)
+      setRecipientsData(result)
+      setRecipientsPage(result.currentPage || page)
+    } catch (error) {
+      setRecipientsData(null)
+      setRecipientsError(getErrorMessage(error))
+    } finally {
+      setRecipientsLoading(false)
+    }
+  }, [])
+
   const openTaskDetail = useCallback(async (taskId: string) => {
     const normalizedTaskId = taskId.trim()
     if (!normalizedTaskId) return
@@ -459,14 +485,24 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
     setDetailTaskId(normalizedTaskId)
     setDetailTask(null)
     setDetailError("")
+    setRecipientsTaskId(normalizedTaskId)
+    setRecipientsPage(1)
+    setRecipientsData(null)
+    setRecipientsError("")
     setDetailLoading(true)
-    try {
-      setDetailTask(await getCreatorPushTask(normalizedTaskId))
-    } catch (error) {
-      setDetailError(getErrorMessage(error))
-    } finally {
-      setDetailLoading(false)
+    const [taskResult, recipientsResult] = await Promise.allSettled([
+      getCreatorPushTask(normalizedTaskId),
+      getCreatorPushRecipients(normalizedTaskId, 1, 20),
+    ])
+    if (taskResult.status === "fulfilled") setDetailTask(taskResult.value)
+    else setDetailError(getErrorMessage(taskResult.reason))
+    if (recipientsResult.status === "fulfilled") {
+      setRecipientsData(recipientsResult.value)
+      setRecipientsPage(recipientsResult.value.currentPage || 1)
+    } else {
+      setRecipientsError(getErrorMessage(recipientsResult.reason))
     }
+    setDetailLoading(false)
   }, [])
 
   const modeOptions = [
@@ -554,7 +590,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
         <DialogContent className="max-w-6xl">
           <DialogHeader><DialogTitle>推送记录</DialogTitle><DialogDescription>分页查看历史推送任务及执行结果。</DialogDescription></DialogHeader>
           {historyError ? <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{historyError}</div> : null}
-          {historyLoading ? <div className="mt-4 space-y-2">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border/70"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>任务 ID</TableHead><TableHead>目标类型</TableHead><TableHead>匹配达人</TableHead><TableHead>推送渠道</TableHead><TableHead>推送方式</TableHead><TableHead>计划时间</TableHead><TableHead>状态</TableHead><TableHead>成功</TableHead><TableHead>失败</TableHead><TableHead>跳过</TableHead><TableHead>开始时间</TableHead><TableHead>结束时间</TableHead><TableHead>创建时间</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{historyTasks?.rows.length ? historyTasks.rows.map((task) => <TableRow key={task.taskId}><TableCell className="whitespace-nowrap font-mono text-xs">{task.taskId}</TableCell><TableCell className="whitespace-nowrap text-xs">{targetTypeLabels[task.targetType] ?? task.targetType}</TableCell><TableCell className="whitespace-nowrap text-xs">{number.format(task.matchedCount)} 位</TableCell><TableCell className="whitespace-nowrap text-xs">{task.channels.map((channel) => channel === "STATION" ? "站内信" : "邮件").join("、") || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{task.sendType === "SCHEDULED" ? "定时推送" : "立即推送"}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.scheduledTime)}</TableCell><TableCell><Badge variant={statusVariant(task.status)}>{statusLabels[task.status] ?? task.status}</Badge></TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.successCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.failedCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.skippedCount)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.startTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.endTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.createTime)}</TableCell><TableCell className="text-right"><Button type="button" variant="outline" size="sm" className="whitespace-nowrap" onClick={() => void openTaskDetail(String(task.taskId))}>查看详情</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={14} className="h-36 text-center"><div className="mx-auto flex max-w-xs flex-col items-center text-muted-foreground"><History className="mb-3 h-8 w-8 opacity-35" /><p className="text-xs font-medium text-foreground">暂无推送记录</p><p className="mt-1 text-[10px]">当前没有可展示的推送任务</p></div></TableCell></TableRow>}</TableBody></Table></div>{historyTasks && historyTasks.total > 0 ? <div className="flex flex-col justify-between gap-3 border-t border-border/70 px-4 py-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center"><span>共 {number.format(historyTasks.total)} 条 · 第 {historyTasks.currentPage} / {totalHistoryPages} 页</span><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage <= 1} onClick={() => void loadHistory(historyPage - 1)}>上一页</Button><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage >= totalHistoryPages} onClick={() => void loadHistory(historyPage + 1)}>下一页</Button></div></div> : null}</div>}
+          {historyLoading ? <div className="mt-4 space-y-2">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border/70"><div className="overflow-x-auto"><Table className="min-w-max"><TableHeader><TableRow><TableHead className="whitespace-nowrap">任务 ID</TableHead><TableHead className="whitespace-nowrap">目标类型</TableHead><TableHead className="whitespace-nowrap">匹配达人</TableHead><TableHead className="whitespace-nowrap">推送渠道</TableHead><TableHead className="whitespace-nowrap">推送方式</TableHead><TableHead className="whitespace-nowrap">计划时间</TableHead><TableHead className="whitespace-nowrap">状态</TableHead><TableHead className="whitespace-nowrap">成功</TableHead><TableHead className="whitespace-nowrap">失败</TableHead><TableHead className="whitespace-nowrap">跳过</TableHead><TableHead className="whitespace-nowrap">开始时间</TableHead><TableHead className="whitespace-nowrap">结束时间</TableHead><TableHead className="whitespace-nowrap">创建时间</TableHead><TableHead className="sticky right-0 z-10 whitespace-nowrap bg-card text-right">操作</TableHead></TableRow></TableHeader><TableBody>{historyTasks?.rows.length ? historyTasks.rows.map((task) => <TableRow key={task.taskId}><TableCell className="whitespace-nowrap font-mono text-xs">{task.taskId}</TableCell><TableCell className="whitespace-nowrap text-xs">{targetTypeLabels[task.targetType] ?? task.targetType}</TableCell><TableCell className="whitespace-nowrap text-xs">{number.format(task.matchedCount)} 位</TableCell><TableCell className="whitespace-nowrap text-xs">{task.channels.map((channel) => channel === "STATION" ? "站内信" : "邮件").join("、") || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{task.sendType === "SCHEDULED" ? "定时推送" : "立即推送"}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.scheduledTime)}</TableCell><TableCell className="whitespace-nowrap"><Badge variant={statusVariant(task.status)}>{statusLabels[task.status] ?? task.status}</Badge></TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.successCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.failedCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.skippedCount)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.startTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.endTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.createTime)}</TableCell><TableCell className="sticky right-0 z-10 whitespace-nowrap bg-card text-right"><Button type="button" variant="outline" size="sm" className="whitespace-nowrap" onClick={() => void openTaskDetail(String(task.taskId))}>查看详情</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={14} className="h-36 text-center"><div className="mx-auto flex max-w-xs flex-col items-center text-muted-foreground"><History className="mb-3 h-8 w-8 opacity-35" /><p className="text-xs font-medium text-foreground">暂无推送记录</p><p className="mt-1 text-[10px]">当前没有可展示的推送任务</p></div></TableCell></TableRow>}</TableBody></Table></div>{historyTasks && historyTasks.total > 0 ? <div className="flex flex-col justify-between gap-3 border-t border-border/70 px-4 py-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center"><span>共 {number.format(historyTasks.total)} 条 · 第 {historyTasks.currentPage} / {totalHistoryPages} 页</span><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage <= 1} onClick={() => void loadHistory(historyPage - 1)}>上一页</Button><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage >= totalHistoryPages} onClick={() => void loadHistory(historyPage + 1)}>下一页</Button></div></div> : null}</div>}
         </DialogContent>
       </Dialog>
 
@@ -579,6 +615,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
             <section className="rounded-xl border border-border/70 p-4"><p className="mb-3 text-xs font-semibold">目标配置</p><pre className="max-h-52 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/60 p-3 font-mono text-[10px] leading-5">{JSON.stringify(detailTask.target, null, 2)}</pre></section>
             {detailTask.channels.includes("STATION") ? <section className="rounded-xl border border-border/70 p-4"><div className="mb-3 flex items-center gap-2"><Bell className="h-4 w-4 text-emerald-600" /><p className="text-xs font-semibold">站内信内容</p></div><DetailItem label="消息标题">{detailTask.stationTitle || "--"}</DetailItem><div className="mt-4"><DetailItem label="消息正文"><p className="whitespace-pre-wrap font-normal leading-5">{detailTask.stationContent || "--"}</p></DetailItem></div></section> : null}
             {detailTask.channels.includes("EMAIL") ? <section className="rounded-xl border border-border/70 p-4"><div className="mb-3 flex items-center gap-2"><Mail className="h-4 w-4 text-sky-600" /><p className="text-xs font-semibold">邮件内容</p></div><DetailItem label="邮件主题">{detailTask.emailSubject || "--"}</DetailItem><div className="mt-4"><DetailItem label="邮件正文"><p className="whitespace-pre-wrap font-normal leading-5">{detailTask.emailContent || "--"}</p></DetailItem></div></section> : null}
+            <section className="rounded-xl border border-border/70 p-4"><div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-violet-600" /><p className="text-xs font-semibold">发送达人列表</p></div>{recipientsError ? <div role="alert" className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{recipientsError}<Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => void loadRecipients(recipientsTaskId, recipientsPage)}>重试</Button></div> : recipientsLoading ? <div className="space-y-2">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}</div> : <div className="overflow-hidden rounded-xl border border-border/70"><div className="overflow-x-auto"><Table className="min-w-max"><TableHeader><TableRow><TableHead className="whitespace-nowrap">LGI ID</TableHead><TableHead className="whitespace-nowrap">昵称</TableHead><TableHead className="whitespace-nowrap">通知邮箱</TableHead><TableHead className="whitespace-nowrap">站内信状态</TableHead><TableHead className="whitespace-nowrap">邮件状态</TableHead><TableHead className="whitespace-nowrap">站内信发送时间</TableHead><TableHead className="whitespace-nowrap">邮件发送时间</TableHead></TableRow></TableHeader><TableBody>{recipientsData?.rows.length ? recipientsData.rows.map((recipient) => <TableRow key={recipient.id}><TableCell className="whitespace-nowrap font-mono text-xs">{recipient.lgiId || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{recipient.nickname || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{recipient.toEmail || "--"}</TableCell><TableCell className="whitespace-nowrap"><Badge variant={statusVariant(recipient.stationStatus)}>{recipient.stationStatus ? statusLabels[recipient.stationStatus] ?? recipient.stationStatus : "未选择"}</Badge></TableCell><TableCell className="whitespace-nowrap"><Badge variant={statusVariant(recipient.emailStatus)}>{recipient.emailStatus ? statusLabels[recipient.emailStatus] ?? recipient.emailStatus : "未选择"}</Badge></TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(recipient.stationSentTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(recipient.emailSentTime)}</TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-28 text-center text-xs text-muted-foreground">暂无发送达人记录</TableCell></TableRow>}</TableBody></Table></div>{recipientsData && recipientsData.total > 0 ? <div className="flex flex-col justify-between gap-3 border-t border-border/70 px-4 py-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center"><span>共 {number.format(recipientsData.total)} 位达人 · 第 {recipientsData.currentPage} / {totalRecipientsPages} 页</span><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={recipientsLoading || recipientsPage <= 1} onClick={() => void loadRecipients(recipientsTaskId, recipientsPage - 1)}>上一页</Button><Button type="button" variant="outline" size="sm" disabled={recipientsLoading || recipientsPage >= totalRecipientsPages} onClick={() => void loadRecipients(recipientsTaskId, recipientsPage + 1)}>下一页</Button></div></div> : null}</div>}</section>
           </div> : null}
         </DialogContent>
       </Dialog>
