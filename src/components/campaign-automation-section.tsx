@@ -122,11 +122,13 @@ function getAutomationTemplateErrorMessage(error: unknown) {
 }
 
 export function CampaignAutomationSection({
+  refreshKey = 0,
   matchingRule,
   onToggleMatchingRule,
   matchingRuleUpdating = false,
   onAction,
 }: {
+  refreshKey?: number
   matchingRule: AutomationRule | null
   onToggleMatchingRule: (enabled: boolean) => void
   matchingRuleUpdating?: boolean
@@ -191,7 +193,7 @@ export function CampaignAutomationSection({
       if (active) setNoApplicationLoading(false)
     })
     return () => { active = false }
-  }, [noApplicationPage, noApplicationRequestVersion, noApplicationStatus])
+  }, [noApplicationPage, noApplicationRequestVersion, noApplicationStatus, refreshKey])
 
   useEffect(() => {
     let active = true
@@ -211,7 +213,7 @@ export function CampaignAutomationSection({
       if (active) setAuditTimeoutLoading(false)
     })
     return () => { active = false }
-  }, [auditTimeoutPage, auditTimeoutRequestVersion, auditTimeoutStatus])
+  }, [auditTimeoutPage, auditTimeoutRequestVersion, auditTimeoutStatus, refreshKey])
 
   useEffect(() => {
     let active = true
@@ -230,7 +232,7 @@ export function CampaignAutomationSection({
         if (active) setRankingLoading(false)
       })
     return () => { active = false }
-  }, [rankingDays, rankingPage, rankingRequestVersion])
+  }, [rankingDays, rankingPage, rankingRequestVersion, refreshKey])
 
   async function openMatchingTemplate() {
     if (!matchingRule) return
@@ -374,9 +376,10 @@ export function CampaignAutomationSection({
           <h3 className="mt-4 text-base font-semibold">{matchingRule.ruleName}</h3>
           <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{matchingRule.description}</p>
           <div className="mt-4 rounded-xl bg-muted/60 p-3"><p className="text-[9px] font-medium text-muted-foreground">触发条件</p><p className="mt-1 text-[11px] font-medium">{matchingRule.triggerDescription}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] text-muted-foreground"><span>{matchingRule.executionMode}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />最新执行 {matchingRule.latestExecutionTime || "暂无执行记录"}</span></div></div>
-          <div className="mt-4 grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
+          <div className="mt-4 grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-5 sm:divide-y-0">
             <div className="pb-3 sm:pb-0"><p className="text-[9px] text-muted-foreground">待处理商单</p><p className="mt-1 font-mono text-lg font-bold">{number.format(matchingRule.pendingCount)}</p></div>
             <div className="pb-3 pl-3 sm:pb-0"><p className="text-[9px] text-muted-foreground">累计处理商单</p><p className="mt-1 font-mono text-lg font-bold">{number.format(matchingRule.totalProcessedCount)}</p></div>
+            <div className="pb-3 pl-3 pt-3 sm:pb-0 sm:pt-0"><p className="text-[9px] text-muted-foreground">累计申请达人</p><p className="mt-1 font-mono text-lg font-bold">{number.format(matchingRule.totalActivatedCount)}</p></div>
             <div className="pt-3 sm:pl-3 sm:pt-0"><p className="text-[9px] text-muted-foreground">今日匹配达人</p><p className="mt-1 font-mono text-lg font-bold">{number.format(matchingRule.todayProcessedCount)}</p></div>
             <div className="pl-3 pt-3 sm:pt-0"><p className="text-[9px] text-muted-foreground">申请率</p><p className="mt-1 font-mono text-lg font-bold">{formatAutomationRate(matchingRule.activationRate)}</p></div>
           </div>

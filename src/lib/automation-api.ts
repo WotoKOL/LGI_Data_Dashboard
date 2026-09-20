@@ -12,8 +12,8 @@ export type AutomationRuleCode =
 export type AutomationOverview = {
   pendingActivationCreatorCount: number
   newPendingCreatorCount: number
-  pendingCampaignWarningCount: number
-  overdueCampaignWarningCount: number
+  auditTimeoutCampaignWarningCount: number
+  noApplicationCampaignWarningCount: number
   exceptionAndTodoCount: number
   todayErrorCount: number
   ticketCount: number
@@ -28,6 +28,7 @@ export type AutomationRule = {
   executionMode: string
   pendingCount: number
   totalProcessedCount: number
+  totalActivatedCount: number
   todayProcessedCount: number
   activationRate: number
   latestExecutionTime: string | null

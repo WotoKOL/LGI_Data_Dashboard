@@ -41,6 +41,7 @@ import {
   type CreatorPushOptions,
   type CreatorPushRecipientsPage,
   type CreatorPushTarget,
+  type CreatorPushTargetType,
   type CreatorPushTask,
 } from "@/lib/creator-information-push-api"
 import { cn, number } from "@/lib/utils"
@@ -80,6 +81,13 @@ const statusLabels: Record<string, string> = {
   CANCELLED: "已取消",
   CANCELED: "已取消",
   SKIPPED: "已跳过",
+}
+
+const targetTypeLabels: Record<CreatorPushTargetType, string> = {
+  ALL: "全域达人",
+  SPECIFIED_IDS: "指定达人 ID",
+  MEMBERSHIP: "按会员版本",
+  CUSTOM: "自定义筛选",
 }
 
 function getErrorMessage(error: unknown) {
@@ -223,7 +231,7 @@ function CreatorPushCurrentTask({ task, loading, onRefresh, onCancel, onDetail }
   )
 }
 
-export function CreatorPushNode({ onAction }: { onAction: (message: string) => void }) {
+export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: number; onAction: (message: string) => void }) {
   const [targetMode, setTargetMode] = useState<TargetMode>("all")
   const [creatorIds, setCreatorIds] = useState("")
   const [memberTargets, setMemberTargets] = useState<string[]>([])
@@ -329,7 +337,25 @@ export function CreatorPushNode({ onAction }: { onAction: (message: string) => v
         setCurrentTaskLoading(false)
       })
     return () => { active = false }
-  }, [])
+  }, [refreshKey])
+
+  useEffect(() => {
+    if (!currentTask || terminalStatuses.has(currentTask.status)) return
+    let active = true
+    const pollTimer = window.setInterval(() => {
+      void getCurrentCreatorPushTask()
+        .then((nextTask) => {
+          if (active) setCurrentTask(nextTask)
+        })
+        .catch(() => {
+          // 轮询失败时保留当前任务信息，下一轮继续尝试。
+        })
+    }, 5000)
+    return () => {
+      active = false
+      window.clearInterval(pollTimer)
+    }
+  }, [currentTask])
 
   useEffect(() => {
     let active = true
@@ -346,7 +372,7 @@ export function CreatorPushNode({ onAction }: { onAction: (message: string) => v
         .finally(() => { if (active) setMatchLoading(false) })
     }, 350)
     return () => { active = false; window.clearTimeout(timeout) }
-  }, [target])
+  }, [refreshKey, target])
 
   function toggleChannel(channel: MessageChannel) {
     setChannels((current) => toggleValue(current, channel) as MessageChannel[])
@@ -549,7 +575,7 @@ export function CreatorPushNode({ onAction }: { onAction: (message: string) => v
             <section className="grid gap-4 rounded-xl border border-border/70 p-4 sm:grid-cols-2 lg:grid-cols-4">
               <DetailItem label="任务 ID"><span className="font-mono">{detailTask.taskId}</span></DetailItem>
               <DetailItem label="任务状态"><Badge variant={statusVariant(detailTask.status)}>{statusLabels[detailTask.status] ?? detailTask.status}</Badge></DetailItem>
-              <DetailItem label="目标类型">{detailTask.targetType}</DetailItem>
+              <DetailItem label="目标类型">{targetTypeLabels[detailTask.targetType] ?? detailTask.targetType}</DetailItem>
               <DetailItem label="匹配达人">{number.format(detailTask.matchedCount)} 位</DetailItem>
               <DetailItem label="推送渠道">{detailTask.channels.map((channel) => channel === "STATION" ? "站内信" : "邮件").join("、") || "--"}</DetailItem>
               <DetailItem label="推送方式">{detailTask.sendType === "SCHEDULED" ? "定时推送" : "立即推送"}</DetailItem>

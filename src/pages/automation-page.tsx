@@ -132,7 +132,7 @@ function RuleCardSkeleton() {
         <Skeleton className="h-5 w-32" />
         <div className="space-y-2"><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-4/5" /></div>
         <div className="space-y-3 rounded-xl bg-muted/50 p-3"><Skeleton className="h-3 w-14" /><Skeleton className="h-4 w-3/4" /><div className="flex justify-between"><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-28" /></div></div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="space-y-2"><Skeleton className="h-3 w-12" /><Skeleton className="h-6 w-16" /></div>)}</div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="space-y-2"><Skeleton className="h-3 w-12" /><Skeleton className="h-6 w-16" /></div>)}</div>
         <Skeleton className="h-8 w-24 rounded-full" />
       </CardContent>
     </Card>
@@ -218,6 +218,7 @@ export function AutomationPage() {
   const [rules, setRules] = useState<AutomationRule[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [pageError, setPageError] = useState("")
   const [lastUpdatedAt, setLastUpdatedAt] = useState("")
   const [updatingRules, setUpdatingRules] = useState<Set<AutomationRuleCode>>(() => new Set())
@@ -241,7 +242,7 @@ export function AutomationPage() {
 
   const creatorRules = useMemo(() => rules.filter((rule) => Boolean(ruleVisuals[rule.ruleCode])), [rules])
   const campaignRecommendationRule = useMemo(() => rules.find((rule) => rule.ruleCode === "NEW_CAMPAIGN_CREATOR_RECOMMENDATION") ?? null, [rules])
-  const enabledRuleCount = useMemo(() => creatorRules.filter((rule) => rule.enabled).length, [creatorRules])
+  const enabledRuleCount = useMemo(() => rules.filter((rule) => rule.enabled).length, [rules])
 
   const loadData = useCallback(async (initial = false) => {
     if (initial) setLoading(true)
@@ -283,6 +284,11 @@ export function AutomationPage() {
     }
   }, [])
 
+  const refreshAll = useCallback(() => {
+    setRefreshVersion((version) => version + 1)
+    void loadData()
+  }, [loadData])
+
   useEffect(() => {
     let active = true
     void Promise.all([getAutomationOverview(), getAutomationRules()])
@@ -305,7 +311,7 @@ export function AutomationPage() {
   useEffect(() => {
     const requestId = window.setTimeout(() => void loadFailureLogs(), 0)
     return () => window.clearTimeout(requestId)
-  }, [loadFailureLogs])
+  }, [loadFailureLogs, refreshVersion])
 
   async function toggleRule(rule: AutomationRule, enabled: boolean) {
     setUpdatingRules((current) => new Set(current).add(rule.ruleCode))
@@ -387,14 +393,14 @@ export function AutomationPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      <AutomationPageHeader enabledCount={enabledRuleCount} totalCount={creatorRules.length} lastUpdatedAt={lastUpdatedAt} refreshing={refreshing} onRefresh={() => void loadData()} />
+      <AutomationPageHeader enabledCount={enabledRuleCount} totalCount={rules.length} lastUpdatedAt={lastUpdatedAt} refreshing={refreshing} onRefresh={refreshAll} />
 
       {loading ? <PageSkeleton /> : pageError ? <ErrorPanel message={pageError} onRetry={() => void loadData(true)} /> : overview ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="运行中规则" value={enabledRuleCount} note={`共 ${creatorRules.length} 条达人规则`} icon={Zap} tone="bg-violet-50 text-violet-600" />
+            <SummaryCard label="运行中规则" value={enabledRuleCount} note={`共 ${rules.length} 条自动化规则`} icon={Zap} tone="bg-violet-50 text-violet-600" />
             <SummaryCard label="待激活达人" value={overview.pendingActivationCreatorCount} note={`今日新增 ${number.format(overview.newPendingCreatorCount)} 人`} icon={UsersRound} tone="bg-amber-50 text-amber-600" />
-            <SummaryCard label="待处理商单预警" value={overview.pendingCampaignWarningCount} note={`${number.format(overview.overdueCampaignWarningCount)} 个已超过 7 天`} icon={AlertTriangle} tone="bg-rose-50 text-rose-600" />
+            <SummaryCard label="待处理商单预警" value={overview.auditTimeoutCampaignWarningCount + overview.noApplicationCampaignWarningCount} note={`其中 ${number.format(overview.noApplicationCampaignWarningCount)} 个待调整 · ${number.format(overview.auditTimeoutCampaignWarningCount)} 个审核超时`} icon={AlertTriangle} tone="bg-rose-50 text-rose-600" />
             <SummaryCard label="异常与待办工单" value={overview.exceptionAndTodoCount} note={`${number.format(overview.todayErrorCount)} 条今日错误 · ${number.format(overview.ticketCount)} 个工单`} icon={ShieldAlert} tone="bg-sky-50 text-sky-600" />
           </div>
 
@@ -426,9 +432,10 @@ export function AutomationPage() {
                             <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />最新执行 {formatExecutionTime(rule.latestExecutionTime)}</span>
                           </div>
                         </div>
-                        <div className="mt-4 grid grid-cols-2 gap-y-4 divide-x-0 sm:grid-cols-4 sm:divide-x sm:divide-border">
+                        <div className="mt-4 grid grid-cols-2 gap-y-4 divide-x-0 sm:grid-cols-5 sm:divide-x sm:divide-border">
                           <div><p className="text-[9px] text-muted-foreground">待处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.pendingCount)}</p></div>
                           <div className="sm:pl-3"><p className="text-[9px] text-muted-foreground">累计处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.totalProcessedCount)}</p></div>
+                          <div className="sm:pl-3"><p className="text-[9px] text-muted-foreground">累计激活</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.totalActivatedCount)}</p></div>
                           <div className="sm:pl-3"><p className="text-[9px] text-muted-foreground">今日处理</p><p className="mt-1 font-mono text-lg font-bold">{number.format(rule.todayProcessedCount)}</p></div>
                           <div className="sm:pl-3"><p className="text-[9px] text-muted-foreground">激活率</p><p className="mt-1 font-mono text-lg font-bold">{formatRate(rule.activationRate)}</p></div>
                         </div>
@@ -443,7 +450,7 @@ export function AutomationPage() {
             ) : (
               <Card className="border-0"><CardContent className="p-8 text-center text-sm text-muted-foreground">当前没有可展示的达人自动化规则</CardContent></Card>
             )}
-            <CreatorPushNode onAction={showAction} />
+            <CreatorPushNode refreshKey={refreshVersion} onAction={showAction} />
           </section>
         </>
       ) : null}
@@ -452,7 +459,7 @@ export function AutomationPage() {
         <>
           <section className="space-y-4">
             <SectionHeading eyebrow="Campaign operations" title="品牌方/商单自动化运营" description="聚合无申请商单与品牌方审核超时问题，由运营人工确认处理" />
-            <CampaignAutomationSection matchingRule={campaignRecommendationRule} matchingRuleUpdating={campaignRecommendationRule ? updatingRules.has(campaignRecommendationRule.ruleCode) : false} onToggleMatchingRule={(enabled) => { if (campaignRecommendationRule) void toggleRule(campaignRecommendationRule, enabled) }} onAction={showAction} />
+            <CampaignAutomationSection refreshKey={refreshVersion} matchingRule={campaignRecommendationRule} matchingRuleUpdating={campaignRecommendationRule ? updatingRules.has(campaignRecommendationRule.ruleCode) : false} onToggleMatchingRule={(enabled) => { if (campaignRecommendationRule) void toggleRule(campaignRecommendationRule, enabled) }} onAction={showAction} />
           </section>
 
           <section className="space-y-4">
