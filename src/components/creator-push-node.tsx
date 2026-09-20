@@ -33,16 +33,16 @@ import {
   createCreatorPushTask,
   getCreatorPushMatchCount,
   getCreatorPushOptions,
-  getCreatorPushRecipients,
+  getCreatorPushTasks,
   getCreatorPushTask,
   getCurrentCreatorPushTask,
   type CreatorPushMatchCount,
   type CreatorPushOption,
   type CreatorPushOptions,
-  type CreatorPushRecipientsPage,
   type CreatorPushTarget,
   type CreatorPushTargetType,
   type CreatorPushTask,
+  type CreatorPushTasksPage,
 } from "@/lib/creator-information-push-api"
 import { cn, number } from "@/lib/utils"
 
@@ -259,9 +259,8 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
   const [cancelTarget, setCancelTarget] = useState<CreatorPushTask | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [historyTaskId, setHistoryTaskId] = useState("")
-  const [historyResultTaskId, setHistoryResultTaskId] = useState("")
-  const [historyRecipients, setHistoryRecipients] = useState<CreatorPushRecipientsPage | null>(null)
+  const [historyTasks, setHistoryTasks] = useState<CreatorPushTasksPage | null>(null)
+  const [historyPage, setHistoryPage] = useState(1)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState("")
   const [detailOpen, setDetailOpen] = useState(false)
@@ -290,7 +289,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
 
   const activeCount = matchResult?.matchedCount ?? 0
   const hasValidSchedule = deliveryMode === "immediate" || scheduledAt > minimumScheduledAt
-  const totalHistoryPages = Math.max(1, Math.ceil((historyRecipients?.total ?? 0) / (historyRecipients?.pageSize || 20)))
+  const totalHistoryPages = Math.max(1, Math.ceil((historyTasks?.total ?? 0) / (historyTasks?.pageSize || 20)))
 
   const loadOptions = useCallback(async () => {
     setOptionsLoading(true)
@@ -431,34 +430,26 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
     }
   }
 
-  const loadHistory = useCallback(async (taskId: string, page = 1) => {
-    const normalizedTaskId = taskId.trim()
-    if (!normalizedTaskId) {
-      setHistoryError("请输入任务 ID")
-      return
-    }
+  const loadHistory = useCallback(async (page = 1) => {
     setHistoryLoading(true)
     setHistoryError("")
     try {
-      setHistoryRecipients(await getCreatorPushRecipients(normalizedTaskId, page, 20))
-      setHistoryTaskId(normalizedTaskId)
-      setHistoryResultTaskId(normalizedTaskId)
+      setHistoryTasks(await getCreatorPushTasks(page, 20))
+      setHistoryPage(page)
     } catch (error) {
-      setHistoryRecipients(null)
-      setHistoryResultTaskId("")
+      setHistoryTasks(null)
       setHistoryError(getErrorMessage(error))
     } finally {
       setHistoryLoading(false)
     }
   }, [])
 
-  function openHistory(taskId = "") {
+  function openHistory() {
     setHistoryOpen(true)
-    setHistoryTaskId(taskId)
-    setHistoryResultTaskId("")
-    setHistoryRecipients(null)
+    setHistoryPage(1)
+    setHistoryTasks(null)
     setHistoryError("")
-    if (taskId) void loadHistory(taskId)
+    void loadHistory(1)
   }
 
   const openTaskDetail = useCallback(async (taskId: string) => {
@@ -561,10 +552,9 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
         <DialogContent className="max-w-6xl">
-          <DialogHeader><DialogTitle>推送记录</DialogTitle><DialogDescription>输入任务 ID，分页查询本次推送的收件人与站内信、邮件发送结果。</DialogDescription></DialogHeader>
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row"><Input value={historyTaskId} onChange={(event) => setHistoryTaskId(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void loadHistory(historyTaskId) }} placeholder="请输入推送任务 ID" className="font-mono" /><Button type="button" disabled={historyLoading} onClick={() => void loadHistory(historyTaskId)}>{historyLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}查询</Button></div>
+          <DialogHeader><DialogTitle>推送记录</DialogTitle><DialogDescription>分页查看历史推送任务及执行结果。</DialogDescription></DialogHeader>
           {historyError ? <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{historyError}</div> : null}
-          {historyLoading ? <div className="mt-4 space-y-2">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border/70"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>达人</TableHead><TableHead>会员版本</TableHead><TableHead>通知邮箱</TableHead><TableHead>站内信状态</TableHead><TableHead>邮件状态</TableHead><TableHead>重试次数</TableHead><TableHead>发送时间 / 错误</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{historyRecipients?.rows.length ? historyRecipients.rows.map((recipient) => <TableRow key={recipient.id}><TableCell><p className="whitespace-nowrap text-xs font-medium">{recipient.nickname || "--"}</p><p className="mt-0.5 whitespace-nowrap font-mono text-[9px] text-muted-foreground">{recipient.lgiId}</p></TableCell><TableCell className="whitespace-nowrap text-xs">{recipient.membershipName || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{recipient.toEmail || "--"}</TableCell><TableCell><Badge variant={statusVariant(recipient.stationStatus)}>{recipient.stationStatus ? statusLabels[recipient.stationStatus] ?? recipient.stationStatus : "未选择"}</Badge></TableCell><TableCell><Badge variant={statusVariant(recipient.emailStatus)}>{recipient.emailStatus ? statusLabels[recipient.emailStatus] ?? recipient.emailStatus : "未选择"}</Badge></TableCell><TableCell className="whitespace-nowrap text-xs">站内信 {recipient.stationRetryCount} · 邮件 {recipient.emailRetryCount}</TableCell><TableCell className="min-w-52 text-[10px]"><p>{formatDateTime(recipient.stationSentTime || recipient.emailSentTime)}</p>{recipient.stationErrorMessage || recipient.emailErrorMessage ? <p className="mt-1 text-rose-600">{recipient.stationErrorMessage || recipient.emailErrorMessage}</p> : null}</TableCell><TableCell className="text-right"><Button type="button" variant="outline" size="sm" className="whitespace-nowrap" onClick={() => void openTaskDetail(historyResultTaskId)}>查看推送详情</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={8} className="h-36 text-center"><div className="mx-auto flex max-w-xs flex-col items-center text-muted-foreground"><History className="mb-3 h-8 w-8 opacity-35" /><p className="text-xs font-medium text-foreground">{historyRecipients ? "暂无推送记录" : "请输入任务 ID 查询"}</p><p className="mt-1 text-[10px]">{historyRecipients ? "该任务尚未产生收件人发送记录" : "查询后将在这里显示收件人和发送状态"}</p></div></TableCell></TableRow>}</TableBody></Table></div>{historyRecipients ? <div className="flex flex-col justify-between gap-3 border-t border-border/70 px-4 py-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center"><span>共 {number.format(historyRecipients.total)} 条 · 第 {historyRecipients.currentPage} / {totalHistoryPages} 页</span><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyRecipients.currentPage <= 1} onClick={() => void loadHistory(historyResultTaskId, historyRecipients.currentPage - 1)}>上一页</Button><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyRecipients.currentPage >= totalHistoryPages} onClick={() => void loadHistory(historyResultTaskId, historyRecipients.currentPage + 1)}>下一页</Button></div></div> : null}</div>}
+          {historyLoading ? <div className="mt-4 space-y-2">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border/70"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>任务 ID</TableHead><TableHead>目标类型</TableHead><TableHead>匹配达人</TableHead><TableHead>推送渠道</TableHead><TableHead>推送方式</TableHead><TableHead>计划时间</TableHead><TableHead>状态</TableHead><TableHead>成功</TableHead><TableHead>失败</TableHead><TableHead>跳过</TableHead><TableHead>开始时间</TableHead><TableHead>结束时间</TableHead><TableHead>创建时间</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{historyTasks?.rows.length ? historyTasks.rows.map((task) => <TableRow key={task.taskId}><TableCell className="whitespace-nowrap font-mono text-xs">{task.taskId}</TableCell><TableCell className="whitespace-nowrap text-xs">{targetTypeLabels[task.targetType] ?? task.targetType}</TableCell><TableCell className="whitespace-nowrap text-xs">{number.format(task.matchedCount)} 位</TableCell><TableCell className="whitespace-nowrap text-xs">{task.channels.map((channel) => channel === "STATION" ? "站内信" : "邮件").join("、") || "--"}</TableCell><TableCell className="whitespace-nowrap text-xs">{task.sendType === "SCHEDULED" ? "定时推送" : "立即推送"}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.scheduledTime)}</TableCell><TableCell><Badge variant={statusVariant(task.status)}>{statusLabels[task.status] ?? task.status}</Badge></TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.successCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.failedCount)}</TableCell><TableCell className="whitespace-nowrap font-mono text-xs">{number.format(task.skippedCount)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.startTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.endTime)}</TableCell><TableCell className="whitespace-nowrap text-[10px]">{formatDateTime(task.createTime)}</TableCell><TableCell className="text-right"><Button type="button" variant="outline" size="sm" className="whitespace-nowrap" onClick={() => void openTaskDetail(String(task.taskId))}>查看详情</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={14} className="h-36 text-center"><div className="mx-auto flex max-w-xs flex-col items-center text-muted-foreground"><History className="mb-3 h-8 w-8 opacity-35" /><p className="text-xs font-medium text-foreground">暂无推送记录</p><p className="mt-1 text-[10px]">当前没有可展示的推送任务</p></div></TableCell></TableRow>}</TableBody></Table></div>{historyTasks && historyTasks.total > 0 ? <div className="flex flex-col justify-between gap-3 border-t border-border/70 px-4 py-3 text-[10px] text-muted-foreground sm:flex-row sm:items-center"><span>共 {number.format(historyTasks.total)} 条 · 第 {historyTasks.currentPage} / {totalHistoryPages} 页</span><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage <= 1} onClick={() => void loadHistory(historyPage - 1)}>上一页</Button><Button type="button" variant="outline" size="sm" disabled={historyLoading || historyPage >= totalHistoryPages} onClick={() => void loadHistory(historyPage + 1)}>下一页</Button></div></div> : null}</div>}
         </DialogContent>
       </Dialog>
 

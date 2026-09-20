@@ -80,26 +80,9 @@ export type CreatorPushTask = {
   createTime: string
 }
 
-export type CreatorPushRecipient = {
-  id: string | number
-  lgiId: string
-  nickname: string | null
-  membershipId: number | null
-  membershipName: string | null
-  toEmail: string | null
-  stationStatus: string | null
-  emailStatus: string | null
-  stationRetryCount: number
-  emailRetryCount: number
-  stationErrorMessage: string | null
-  emailErrorMessage: string | null
-  stationSentTime: string | null
-  emailSentTime: string | null
-}
-
-export type CreatorPushRecipientsPage = {
+export type CreatorPushTasksPage = {
   total: number
-  rows: CreatorPushRecipient[]
+  rows: CreatorPushTask[]
   currentPage: number
   pageSize: number
 }
@@ -168,6 +151,16 @@ export async function getCurrentCreatorPushTask() {
   return parseResponse<CreatorPushTask>(response, true)
 }
 
+export async function getCreatorPushTasks(currentPage = 1, pageSize = 20) {
+  const url = new URL(`${CREATOR_PUSH_API_BASE_URL}/tasks`)
+  url.searchParams.set("currentPage", String(currentPage))
+  url.searchParams.set("pageSize", String(pageSize))
+  const requestUrl = url.toString()
+  registerRequestParameters(requestUrl, { currentPage, pageSize })
+  const response = await authenticatedFetch(requestUrl)
+  return parseResponse<CreatorPushTasksPage>(response)
+}
+
 export async function getCreatorPushTask(taskId: string) {
   const response = await authenticatedFetch(`${CREATOR_PUSH_API_BASE_URL}/tasks/${encodeURIComponent(taskId)}`)
   return parseResponse<CreatorPushTask>(response)
@@ -184,14 +177,4 @@ export async function cancelCreatorPushTask(taskId: string) {
     body,
   )
   await parseResponse<null>(response, true)
-}
-
-export async function getCreatorPushRecipients(taskId: string, currentPage = 1, pageSize = 20) {
-  const url = new URL(`${CREATOR_PUSH_API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/recipients`)
-  url.searchParams.set("currentPage", String(currentPage))
-  url.searchParams.set("pageSize", String(pageSize))
-  const requestUrl = url.toString()
-  registerRequestParameters(requestUrl, { currentPage, pageSize })
-  const response = await authenticatedFetch(requestUrl)
-  return parseResponse<CreatorPushRecipientsPage>(response)
 }
