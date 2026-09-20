@@ -6,7 +6,7 @@ const SIGN_SECRET = "hoSA59LcWfCz5"
 const RSA_PUBLIC_KEY = "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAPWZswFK/6++m2Kx72j8q7LKCxi72MZGnk7vQAz9Ed4SJ67juHT7Km7kdTklfaAsYCeQbhDr7CdWFleQtVKM6mMCAwEAAQ=="
 const NONCE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-export type RequestParameters = Record<string, string | number>
+export type RequestParameters = Record<string, unknown>
 
 function sortedEntries(value: Record<string, unknown>, descending = false) {
   const keys = Object.keys(value).sort()
@@ -45,12 +45,21 @@ function getRequestParameters(url: URL): RequestParameters | null {
   return parameters
 }
 
-function createCookieId(path: string, nonce: string, timestamp: number, parameters: RequestParameters | null, requestKey: string) {
+function createCookieId(
+  path: string,
+  nonce: string,
+  timestamp: number,
+  parameters: RequestParameters | null,
+  requestKey: string,
+  method: string,
+) {
   const signatureValues: Record<string, unknown> = {
     s: path,
     nonce,
     timestamp,
-    ...(parameters ?? {}),
+    ...(method.toUpperCase() === "GET"
+      ? (parameters ?? {})
+      : { p: JSON.stringify(parameters ?? {}) }),
   }
   const signatureText = sortedEntries(signatureValues)
     .map(([key, value]) => `${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`)
@@ -70,7 +79,12 @@ function createLegacySign(parameters: RequestParameters | null) {
   return CryptoJS.HmacSHA512(signatureText, SIGN_SECRET).toString()
 }
 
-export function createSignedHeaders(rawUrl: string, token: string, requestParameters?: RequestParameters | null) {
+export function createSignedHeaders(
+  rawUrl: string,
+  token: string,
+  requestParameters?: RequestParameters | null,
+  method = "GET",
+) {
   const url = new URL(rawUrl)
   const timestamp = Date.now()
   const nonce = `${createNonce()}${timestamp}`
@@ -82,7 +96,7 @@ export function createSignedHeaders(rawUrl: string, token: string, requestParame
     appkey: encryptRequestKey(requestKey),
     timestamp: String(timestamp),
     nonce,
-    cookieid: createCookieId(url.pathname, nonce, timestamp, parameters, requestKey),
+    cookieid: createCookieId(url.pathname, nonce, timestamp, parameters, requestKey, method),
     sign: createLegacySign(parameters),
     token,
   }

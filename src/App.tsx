@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react"
 import { TopHeader, type PageKey } from "@/components/top-header"
+import { Toaster } from "@/components/ui/sonner"
 
 const OverviewPage = lazy(() => import("@/pages/overview-page").then((module) => ({ default: module.OverviewPage })))
 const DailyPage = lazy(() => import("@/pages/daily-page").then((module) => ({ default: module.DailyPage })))
@@ -19,6 +20,7 @@ export default function App() {
           {page === "overview" ? <OverviewPage /> : page === "daily" ? <DailyPage /> : <AutomationPage />}
         </Suspense>
       </main>
+      <Toaster position="top-right" richColors closeButton />
     </div>
   )
 }
