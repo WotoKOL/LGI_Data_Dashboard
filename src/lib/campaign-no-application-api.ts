@@ -1,4 +1,5 @@
 import { authenticatedFetch, registerRequestParameters } from "@/lib/api-client"
+import { createExcelFallbackFilename, ensureExcelFilename, getDownloadFilename } from "@/lib/file-download"
 import { getDashboardApiBaseUrl } from "@/lib/runtime-config"
 
 const CAMPAIGN_NO_APPLICATION_API_URL = `${getDashboardApiBaseUrl()}/operations/campaign-no-application/campaigns`
@@ -15,6 +16,8 @@ export type CampaignNoApplicationItem = {
   brandName: string | null
   brandPlatformType: string | null
   brandUserPhone: string | null
+  csm: string | null
+  childBrandId: string | null
   publishTime: string | null
   noApplicationHours: number
   noApplicationDays: number
@@ -80,20 +83,66 @@ export async function getCampaignNoApplicationCampaigns({
   status = "PENDING",
   currentPage = 1,
   pageSize = 20,
+  csm,
+  brandId,
 }: {
   status?: CampaignNoApplicationStatus
   currentPage?: number
   pageSize?: number
+  csm?: string
+  brandId?: string
 } = {}) {
   const url = new URL(CAMPAIGN_NO_APPLICATION_API_URL)
   url.searchParams.set("status", status)
   url.searchParams.set("currentPage", String(currentPage))
   url.searchParams.set("pageSize", String(pageSize))
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
+  if (brandId?.trim()) url.searchParams.set("brandId", brandId.trim())
   const requestUrl = url.toString()
-  const parameters = { status, currentPage, pageSize }
+  const parameters = {
+    status,
+    currentPage,
+    pageSize,
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+    ...(brandId?.trim() ? { brandId: brandId.trim() } : {}),
+  }
   registerRequestParameters(requestUrl, parameters)
   const response = await authenticatedFetch(requestUrl)
   return parseResponse<CampaignNoApplicationPage>(response)
+}
+
+export async function exportCampaignNoApplicationCampaigns({
+  status = "PENDING",
+  csm,
+  brandId,
+}: {
+  status?: CampaignNoApplicationStatus
+  csm?: string
+  brandId?: string
+} = {}) {
+  const url = new URL(`${CAMPAIGN_NO_APPLICATION_API_URL}/export`)
+  url.searchParams.set("status", status)
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
+  if (brandId?.trim()) url.searchParams.set("brandId", brandId.trim())
+  const requestUrl = url.toString()
+  const parameters = {
+    status,
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+    ...(brandId?.trim() ? { brandId: brandId.trim() } : {}),
+  }
+  registerRequestParameters(requestUrl, parameters)
+  const response = await authenticatedFetch(requestUrl)
+  if (!response.ok) {
+    throw new CampaignNoApplicationApiError(`导出失败（HTTP ${response.status}）`, { status: response.status })
+  }
+  if (response.headers.get("content-type")?.includes("json")) {
+    const payload = await response.json() as ApiEnvelope<unknown>
+    throw new CampaignNoApplicationApiError(payload.message || "导出失败", { traceId: payload.traceId })
+  }
+  return {
+    blob: await response.blob(),
+    filename: ensureExcelFilename(getDownloadFilename(response, createExcelFallbackFilename("新商单48小时无申请"))),
+  }
 }
 
 export async function setCampaignNoApplicationHandling(

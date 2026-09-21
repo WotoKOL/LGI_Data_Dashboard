@@ -1,4 +1,5 @@
 import { authenticatedFetch, registerRequestParameters } from "@/lib/api-client"
+import { createExcelFallbackFilename, ensureExcelFilename, getDownloadFilename } from "@/lib/file-download"
 import { getDashboardApiBaseUrl } from "@/lib/runtime-config"
 
 const BRAND_PENDING_AUDITS_API_URL = `${getDashboardApiBaseUrl()}/operations/issues/brand-pending-audits`
@@ -12,6 +13,9 @@ export type BrandPendingAuditItem = {
   brandName: string | null
   brandPlatform: string | null
   brandUserPhone: string | null
+  csm: string | null
+  latestNoteFollowUpTime: string | null
+  noteFollowUpCount: number
   campaignCount: number
   pendingAuditCount: number
 }
@@ -72,4 +76,28 @@ export async function getBrandPendingAudits({
   registerRequestParameters(requestUrl, { ...(days === undefined ? {} : { days }), currentPage, pageSize })
   const response = await authenticatedFetch(requestUrl)
   return parseResponse<BrandPendingAuditsPage>(response)
+}
+
+export async function exportBrandPendingAudits({
+  days,
+}: {
+  days?: BrandPendingAuditsDays
+} = {}) {
+  const url = new URL(`${BRAND_PENDING_AUDITS_API_URL}/export`)
+  if (days !== undefined) url.searchParams.set("days", String(days))
+  const requestUrl = url.toString()
+  const parameters = days === undefined ? {} : { days }
+  registerRequestParameters(requestUrl, parameters)
+  const response = await authenticatedFetch(requestUrl)
+  if (!response.ok) {
+    throw new BrandPendingAuditsApiError(`导出失败（HTTP ${response.status}）`, { status: response.status })
+  }
+  if (response.headers.get("content-type")?.includes("json")) {
+    const payload = await response.json() as ApiEnvelope<unknown>
+    throw new BrandPendingAuditsApiError(payload.message || "导出失败", { traceId: payload.traceId })
+  }
+  return {
+    blob: await response.blob(),
+    filename: ensureExcelFilename(getDownloadFilename(response, createExcelFallbackFilename("品牌方未审核达人数排行榜"))),
+  }
 }

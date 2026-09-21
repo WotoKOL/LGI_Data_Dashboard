@@ -1,4 +1,5 @@
 import { authenticatedFetch, registerRequestParameters } from "@/lib/api-client"
+import { createExcelFallbackFilename, ensureExcelFilename, getDownloadFilename } from "@/lib/file-download"
 import { getDashboardApiBaseUrl } from "@/lib/runtime-config"
 
 const CAMPAIGN_AUDIT_TIMEOUT_API_URL = `${getDashboardApiBaseUrl()}/operations/campaign-audit-timeout/campaigns`
@@ -15,6 +16,8 @@ export type CampaignAuditTimeoutItem = {
   brandName: string | null
   brandPlatformType: string | null
   brandUserPhone: string | null
+  csm: string | null
+  childBrandId: string | null
   publishTime: string | null
   oldestPendingApplyTime: string | null
   lastAuditTime: string | null
@@ -79,19 +82,65 @@ export async function getCampaignAuditTimeoutCampaigns({
   status = "PENDING",
   currentPage = 1,
   pageSize = 20,
+  csm,
+  brandId,
 }: {
   status?: CampaignAuditTimeoutStatus
   currentPage?: number
   pageSize?: number
+  csm?: string
+  brandId?: string
 } = {}) {
   const url = new URL(CAMPAIGN_AUDIT_TIMEOUT_API_URL)
   url.searchParams.set("status", status)
   url.searchParams.set("currentPage", String(currentPage))
   url.searchParams.set("pageSize", String(pageSize))
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
+  if (brandId?.trim()) url.searchParams.set("brandId", brandId.trim())
   const requestUrl = url.toString()
-  registerRequestParameters(requestUrl, { status, currentPage, pageSize })
+  registerRequestParameters(requestUrl, {
+    status,
+    currentPage,
+    pageSize,
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+    ...(brandId?.trim() ? { brandId: brandId.trim() } : {}),
+  })
   const response = await authenticatedFetch(requestUrl)
   return parseResponse<CampaignAuditTimeoutPage>(response)
+}
+
+export async function exportCampaignAuditTimeoutCampaigns({
+  status = "PENDING",
+  csm,
+  brandId,
+}: {
+  status?: CampaignAuditTimeoutStatus
+  csm?: string
+  brandId?: string
+} = {}) {
+  const url = new URL(`${CAMPAIGN_AUDIT_TIMEOUT_API_URL}/export`)
+  url.searchParams.set("status", status)
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
+  if (brandId?.trim()) url.searchParams.set("brandId", brandId.trim())
+  const requestUrl = url.toString()
+  const parameters = {
+    status,
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+    ...(brandId?.trim() ? { brandId: brandId.trim() } : {}),
+  }
+  registerRequestParameters(requestUrl, parameters)
+  const response = await authenticatedFetch(requestUrl)
+  if (!response.ok) {
+    throw new CampaignAuditTimeoutApiError(`导出失败（HTTP ${response.status}）`, { status: response.status })
+  }
+  if (response.headers.get("content-type")?.includes("json")) {
+    const payload = await response.json() as ApiEnvelope<unknown>
+    throw new CampaignAuditTimeoutApiError(payload.message || "导出失败", { traceId: payload.traceId })
+  }
+  return {
+    blob: await response.blob(),
+    filename: ensureExcelFilename(getDownloadFilename(response, createExcelFallbackFilename("商单申请审核超时"))),
+  }
 }
 
 export async function setCampaignAuditTimeoutHandling(campaignId: string, { handled, operator, remark }: { handled: boolean; operator?: string; remark?: string }) {

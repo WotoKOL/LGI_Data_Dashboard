@@ -21,10 +21,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { HtmlEmailEditor } from "@/components/html-email-editor"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { SectionHeading } from "@/components/dashboard-primitives"
 import { CampaignAutomationSection } from "@/components/campaign-automation-section"
@@ -46,7 +46,8 @@ import {
   type AutomationTemplate,
 } from "@/lib/automation-api"
 import { getFailureLogs, type FailureLog } from "@/lib/failure-logs-api"
-import { cn, number } from "@/lib/utils"
+import { hasEmailTemplateContent, normalizeEmailTemplateHtml } from "@/lib/email-template"
+import { cn, formatDateTime, number } from "@/lib/utils"
 
 const ruleVisuals: Partial<Record<AutomationRuleCode, { icon: LucideIcon; tone: string }>> = {
   NEW_REGISTERED_CREATOR: { icon: UserRoundCheck, tone: "bg-violet-50 text-violet-600" },
@@ -67,11 +68,6 @@ function getErrorMessage(error: unknown) {
 function formatRate(value: number) {
   if (!Number.isFinite(value)) return "--"
   return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value)}%`
-}
-
-function formatExecutionTime(value: string | null) {
-  if (!value) return "暂无执行记录"
-  return value.replace("T", " ").replace(/\.\d+$/, "")
 }
 
 function displayValue(value: unknown, fallback = "--") {
@@ -341,7 +337,7 @@ export function AutomationPage() {
       const nextTemplate = await getAutomationTemplate(rule.ruleCode)
       if (templateRequestId.current !== requestId) return
       setTemplate(nextTemplate)
-      setTemplateDraft({ subject: nextTemplate.subject, content: nextTemplate.content })
+      setTemplateDraft({ subject: nextTemplate.subject, content: normalizeEmailTemplateHtml(nextTemplate.content) })
     } catch (error) {
       if (templateRequestId.current === requestId) setTemplateError(getErrorMessage(error))
     } finally {
@@ -361,7 +357,7 @@ export function AutomationPage() {
     if (!templateRuleCode || !template) return
     const subject = templateDraft.subject.trim()
     const content = templateDraft.content.trim()
-    if (!subject || !content) {
+    if (!subject || !hasEmailTemplateContent(content)) {
       setTemplateError("邮件主题和邮件正文不能为空")
       return
     }
@@ -429,7 +425,7 @@ export function AutomationPage() {
                           <p className="mt-1 text-[11px] font-medium">{rule.triggerDescription}</p>
                           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] text-muted-foreground">
                             <span>{rule.executionMode}</span>
-                            <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />最新执行 {formatExecutionTime(rule.latestExecutionTime)}</span>
+                            <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />最新执行 {formatDateTime(rule.latestExecutionTime, "暂无执行记录")}</span>
                           </div>
                         </div>
                         <div className="mt-4 grid grid-cols-2 gap-y-4 divide-x-0 sm:grid-cols-5 sm:divide-x sm:divide-border">
@@ -522,7 +518,7 @@ export function AutomationPage() {
       ) : null}
 
       <Dialog open={Boolean(templateRuleCode)} onOpenChange={(open) => { if (!open) closeTemplate() }}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>配置激活邮件模板</DialogTitle>
             <DialogDescription>{template?.ruleName ?? "正在读取规则模板"}{template ? " · 修改后将用于下一次自动触达" : ""}</DialogDescription>
@@ -534,7 +530,7 @@ export function AutomationPage() {
           ) : template ? (
             <div className="mt-5 space-y-4">
               <label className="block space-y-2"><span className="text-xs font-medium">邮件主题</span><Input value={templateDraft.subject} onChange={(event) => setTemplateDraft((current) => ({ ...current, subject: event.target.value }))} /></label>
-              <label className="block space-y-2"><span className="text-xs font-medium">邮件正文</span><Textarea value={templateDraft.content} onChange={(event) => setTemplateDraft((current) => ({ ...current, content: event.target.value }))} className="min-h-52 font-mono text-xs leading-5" /></label>
+              <div className="space-y-2"><label htmlFor="creator-automation-email-body" className="text-xs font-medium">邮件正文（HTML）</label><HtmlEmailEditor id="creator-automation-email-body" value={templateDraft.content} onChange={(content) => setTemplateDraft((current) => ({ ...current, content }))} /></div>
               <div className="rounded-xl bg-muted p-3 text-[10px] text-muted-foreground">可用变量：<span className="font-mono text-foreground">{template.variables.length ? template.variables.join(" ") : "暂无可用变量"}</span></div>
               {templateError ? <p role="alert" className="text-xs text-rose-600">{templateError}</p> : null}
             </div>
