@@ -61,32 +61,46 @@ async function parseResponse<T>(response: Response) {
 
 export async function getBrandPendingAudits({
   days,
+  csm,
   currentPage = 1,
   pageSize = 20,
 }: {
   days?: BrandPendingAuditsDays
+  csm?: string
   currentPage?: number
   pageSize?: number
 } = {}) {
   const url = new URL(BRAND_PENDING_AUDITS_API_URL)
   if (days !== undefined) url.searchParams.set("days", String(days))
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
   url.searchParams.set("currentPage", String(currentPage))
   url.searchParams.set("pageSize", String(pageSize))
   const requestUrl = url.toString()
-  registerRequestParameters(requestUrl, { ...(days === undefined ? {} : { days }), currentPage, pageSize })
+  registerRequestParameters(requestUrl, {
+    ...(days === undefined ? {} : { days }),
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+    currentPage,
+    pageSize,
+  })
   const response = await authenticatedFetch(requestUrl)
   return parseResponse<BrandPendingAuditsPage>(response)
 }
 
 export async function exportBrandPendingAudits({
   days,
+  csm,
 }: {
   days?: BrandPendingAuditsDays
+  csm?: string
 } = {}) {
   const url = new URL(`${BRAND_PENDING_AUDITS_API_URL}/export`)
   if (days !== undefined) url.searchParams.set("days", String(days))
+  if (csm?.trim()) url.searchParams.set("csm", csm.trim())
   const requestUrl = url.toString()
-  const parameters = days === undefined ? {} : { days }
+  const parameters = {
+    ...(days === undefined ? {} : { days }),
+    ...(csm?.trim() ? { csm: csm.trim() } : {}),
+  }
   registerRequestParameters(requestUrl, parameters)
   const response = await authenticatedFetch(requestUrl)
   if (!response.ok) {

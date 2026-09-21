@@ -236,6 +236,8 @@ export function CampaignAutomationSection({
   const [rankingPage, setRankingPage] = useState(1)
   const [rankingRequestVersion, setRankingRequestVersion] = useState(0)
   const [rankingExporting, setRankingExporting] = useState(false)
+  const [rankingCsmInput, setRankingCsmInput] = useState("")
+  const [rankingCsm, setRankingCsm] = useState("")
   const [notesBrandId, setNotesBrandId] = useState<string | null>(null)
   const [notesData, setNotesData] = useState<BrandNotesPage | null>(null)
   const [notesPage, setNotesPage] = useState(1)
@@ -287,6 +289,19 @@ export function CampaignAutomationSection({
   }, [auditTimeoutBrandId, auditTimeoutBrandIdInput])
 
   useEffect(() => {
+    const nextCsm = rankingCsmInput.trim()
+    const timer = window.setTimeout(() => {
+      if (nextCsm === rankingCsm) return
+      setRankingLoading(true)
+      setRankingError("")
+      setRankingData(null)
+      setRankingPage(1)
+      setRankingCsm(nextCsm)
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [rankingCsm, rankingCsmInput])
+
+  useEffect(() => {
     let active = true
     void getCampaignNoApplicationCampaigns({
       status: noApplicationStatus,
@@ -332,7 +347,7 @@ export function CampaignAutomationSection({
 
   useEffect(() => {
     let active = true
-    void getBrandPendingAudits({ days: rankingDays, currentPage: rankingPage, pageSize: 20 })
+    void getBrandPendingAudits({ days: rankingDays, csm: rankingCsm, currentPage: rankingPage, pageSize: 20 })
       .then((data) => {
         if (active) setRankingData(data)
       })
@@ -347,7 +362,7 @@ export function CampaignAutomationSection({
         if (active) setRankingLoading(false)
       })
     return () => { active = false }
-  }, [rankingDays, rankingPage, rankingRequestVersion, refreshKey])
+  }, [rankingCsm, rankingDays, rankingPage, rankingRequestVersion, refreshKey])
 
   useEffect(() => {
     if (!notesBrandId) return
@@ -442,7 +457,7 @@ export function CampaignAutomationSection({
   async function exportPendingAuditRanking() {
     setRankingExporting(true)
     try {
-      const file = await exportBrandPendingAudits({ days: rankingDays })
+      const file = await exportBrandPendingAudits({ days: rankingDays, csm: rankingCsmInput.trim() })
       saveBlobFile(file.blob, file.filename)
       toast.success("排行榜已导出", { description: file.filename })
     } catch (error) {
@@ -720,6 +735,17 @@ export function CampaignAutomationSection({
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <div className="flex flex-wrap rounded-full bg-muted p-1" role="radiogroup" aria-label="排行榜时间范围">
               {periodOptions.map((option) => <button key={option.value} type="button" role="radio" aria-checked={period === option.value} onClick={() => { if (period === option.value) return; setRankingLoading(true); setRankingError(""); setRankingData(null); setRankingPage(1); setPeriod(option.value) }} className={cn("rounded-full px-3 py-1.5 text-[10px] font-medium transition-all", period === option.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{option.label}</button>)}
+            </div>
+            <div className="relative w-44">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                aria-label="排行榜 CSM 筛选"
+                placeholder="搜索 CSM"
+                value={rankingCsmInput}
+                onChange={(event) => setRankingCsmInput(event.target.value)}
+                className="h-8 pl-8 text-[10px]"
+              />
             </div>
             <Button type="button" variant="outline" size="sm" disabled={rankingExporting} onClick={() => void exportPendingAuditRanking()}>{rankingExporting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}{rankingExporting ? "导出中" : "导出 Excel"}</Button>
           </div>
