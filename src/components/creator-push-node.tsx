@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { HtmlEmailEditor } from "@/components/html-email-editor"
 import {
   CreatorInformationPushApiError,
   cancelCreatorPushTask,
@@ -48,6 +49,7 @@ import {
   type CreatorPushRecipientsPage,
 } from "@/lib/creator-information-push-api"
 import { cn, number } from "@/lib/utils"
+import { hasEmailTemplateContent } from "@/lib/email-template"
 
 type TargetMode = "all" | "ids" | "membership" | "custom"
 type MessageChannel = "inbox" | "email"
@@ -391,7 +393,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
     if (targetMode === "membership" && !memberTargets.length) return "请至少选择一个达人会员版本"
     if (!channels.length) return "请至少选择一个推送渠道"
     if (channels.includes("inbox") && (!inboxDraft.title.trim() || !inboxDraft.content.trim())) return "请填写完整的站内信标题和正文"
-    if (channels.includes("email") && (!emailDraft.subject.trim() || !emailDraft.content.trim())) return "请填写完整的邮件主题和正文"
+    if (channels.includes("email") && (!emailDraft.subject.trim() || !hasEmailTemplateContent(emailDraft.content))) return "请填写完整的邮件主题和正文"
     if (!hasValidSchedule) return "计划推送时间必须晚于当前时间"
     if (matchError) return "当前匹配人数计算失败，请稍后重试"
     if (!activeCount) return "当前条件没有匹配到达人"
@@ -556,7 +558,7 @@ export function CreatorPushNode({ refreshKey = 0, onAction }: { refreshKey?: num
 
           {channels.length ? <section className="grid gap-4 border-t border-border/70 pt-5 xl:grid-cols-2">
             {channels.includes("inbox") ? <div className="rounded-2xl border border-border/70 p-4"><div className="mb-4 flex items-center gap-2"><Bell className="h-4 w-4 text-emerald-600" /><h4 className="text-xs font-semibold">站内信内容</h4><Badge variant="secondary">已启用</Badge></div><div className="space-y-4"><Field label="消息标题"><Input aria-label="消息标题" value={inboxDraft.title} onChange={(event) => setInboxDraft((current) => ({ ...current, title: event.target.value }))} placeholder="请输入站内信标题" /></Field><Field label="消息正文"><Textarea aria-label="消息正文" value={inboxDraft.content} onChange={(event) => setInboxDraft((current) => ({ ...current, content: event.target.value }))} className="min-h-36 text-xs leading-5" placeholder="请输入站内信正文" /></Field></div></div> : null}
-            {channels.includes("email") ? <div className="rounded-2xl border border-border/70 p-4"><div className="mb-4 flex items-center gap-2"><Mail className="h-4 w-4 text-sky-600" /><h4 className="text-xs font-semibold">邮件内容</h4><Badge variant="secondary">已启用</Badge></div><div className="space-y-4"><Field label="邮件主题"><Input aria-label="邮件主题" value={emailDraft.subject} onChange={(event) => setEmailDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="请输入邮件主题" /></Field><Field label="邮件正文"><Textarea aria-label="邮件正文" value={emailDraft.content} onChange={(event) => setEmailDraft((current) => ({ ...current, content: event.target.value }))} className="min-h-36 font-mono text-xs leading-5" placeholder="请输入邮件正文" /></Field></div></div> : null}
+            {channels.includes("email") ? <div className="rounded-2xl border border-border/70 p-4"><div className="mb-4 flex items-center gap-2"><Mail className="h-4 w-4 text-sky-600" /><h4 className="text-xs font-semibold">邮件内容</h4><Badge variant="secondary">已启用</Badge></div><div className="space-y-4"><Field label="邮件主题"><Input aria-label="邮件主题" value={emailDraft.subject} onChange={(event) => setEmailDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="请输入邮件主题" /></Field><Field label="邮件正文（HTML）"><HtmlEmailEditor id="creator-push-email-body" value={emailDraft.content} onChange={(content) => setEmailDraft((current) => ({ ...current, content }))} /></Field></div></div> : null}
             <p className="text-[9px] text-muted-foreground xl:col-span-2">可用变量：<span className="font-mono text-foreground">{optionsLoading ? "正在读取" : options?.templateVariables.length ? options.templateVariables.join(" ") : "暂无可用变量"}</span></p>
           </section> : <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">请至少选择一个推送渠道。</div>}
 
